@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>stratabasor</title>
+<style>
+  :root {
+    --bg: #0c1218;
+    --panel: #101820;
+    --ink: #c5d4e6;
+    --soft: #8ea4bc;
+    --line: #243244;
+    --row: #16202b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+  body { font: 17px/1.45 "Segoe UI", sans-serif; }
+  #app { display: flex; height: 100%; min-height: 0; }
+  #spine {
+    flex: none; width: 220px; background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  #spine.collapsed { width: 44px; }
+  #add {
+    appearance: none; border: 0; outline: 0; background: transparent; color: var(--ink);
+    margin: 0; width: 100%; min-height: 52px; padding: 16px 18px;
+    font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
+  }
+  #tabs { overflow: auto; padding: 0 8px 12px; }
+  #spine.collapsed #tabs { display: none; }
+  .tab {
+    display: block; width: 100%; text-align: left; margin: 0 0 4px;
+    padding: 8px 10px; border: 0; border-radius: 2px; background: transparent;
+    color: var(--ink); font: inherit; cursor: pointer;
+  }
+  .tab.on { background: var(--row); }
+  #split { flex: none; width: 6px; cursor: col-resize; background: var(--line); }
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #add-field { display: none; gap: 8px; padding: 10px; border-bottom: 1px solid var(--line); }
+  #add-field.open { display: flex; }
+  #dir {
+    flex: 1; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    font: inherit; padding: 8px 10px;
+  }
+  #note { color: var(--soft); align-self: center; }
+  #stage { position: relative; flex: 1; min-height: 0; }
+  #tree { height: 100%; min-height: 0; overflow: auto; padding: 8px 0 24px; }
+  #tree.split-view { display: flex; padding: 0; overflow: hidden; }
+  #card {
+    display: none; position: absolute; z-index: 2;
+    top: 72px; left: 20px; right: 20px; bottom: 18%;
+    flex-direction: column; min-height: 0;
+    background: #141e2a; border: 1px solid var(--line);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  }
+  #card.open { display: flex; }
+  #card-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 16px; }
+  .pane { flex: 1; min-width: 0; overflow: auto; }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  .pane h2 {
+    margin: 0; padding: 12px 12px 0; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft);
+  }
+  .empty { color: var(--soft); padding: 16px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  ul.kids { padding-left: 16px; }
+  li.shut > ul { display: none; }
+  .row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    text-align: left; background: transparent; color: var(--ink);
+    border: 0; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  .row:hover { background: var(--row); }
+  .mark { color: var(--soft); width: 1.2em; }
+  .kind { color: var(--soft); font-size: 12px; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="spine">
+    <button id="add" type="button" aria-label="add directory">+</button>
+    <nav id="tabs"></nav>
+  </aside>
+  <div id="split" title="drag to resize, click to collapse"></div>
+  <main id="main">
+    <form id="add-field">
+      <input id="dir" type="text" placeholder="directory" autocomplete="off" />
+      <span id="note"></span>
+    </form>
+    <div id="stage">
+      <div id="tree" class="split-view"></div>
+      <section id="card" aria-label="selected directory">
+        <div id="card-body"></div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+(function () {
+  var spine = document.getElementById("spine");
+  var split = document.getElementById("split");
+  var field = document.getElementById("add-field");
+  var dir = document.getElementById("dir");
+  var note = document.getElementById("note");
+  var tabsEl = document.getElementById("tabs");
+  var treeEl = document.getElementById("tree");
+  var card = document.getElementById("card");
+  var cardBody = document.getElementById("card-body");
+  var roots = [];
+  var active = -1;
+  var binds = [];
+  var wide = 220;
+  var SPLIT = ["C:\\dev", "C:\\Users\\bardw\\durable"];
+
+  function paintTabs() {
+    tabsEl.innerHTML = "";
+    roots.forEach(function (path, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "tab" + (i === active ? " on" : "");
+      b.textContent = path.split(/[\\/]/).filter(Boolean).pop() || path;
+      b.title = path;
+      b.addEventListener("click", function () { select(i); });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function kindWord(node) {
+    if (node.type === "branch_local") return node.is_current ? "local head" : "local";
+    if (node.type === "branch_remote") return "remote";
+    if (node.type === "branch_group") return "branches";
+    if (node.type === "repository") return "repo";
+    if (node.type === "directory") return "folder";
+    return "file";
+  }
+
+  function renderNode(node, depth) {
+    var li = document.createElement("li");
+    var kids = node.children || [];
+    var openFirst = depth === 0 || node.type === "branch_group";
+    if (!openFirst) li.className = "shut";
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "row";
+    var mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = kids.length ? (openFirst ? "v" : ">") : "";
+    var name = document.createElement("span");
+    name.textContent = node.name || "?";
+    var kind = document.createElement("span");
+    kind.className = "kind";
+    kind.textContent = kindWord(node);
+    row.appendChild(mark);
+    row.appendChild(name);
+    row.appendChild(kind);
+    row.addEventListener("click", function () {
+      if (!kids.length) return;
+      var shut = li.classList.toggle("shut");
+      mark.textContent = shut ? ">" : "v";
+    });
+    li.appendChild(row);
+    if (kids.length) {
+      var ul = document.createElement("ul");
+      ul.className = "kids";
+      kids.forEach(function (ch) { ul.appendChild(renderNode(ch, depth + 1)); });
+      li.appendChild(ul);
+    }
+    return li;
+  }
+
+  function fill(host, root, depth) {
+    host.innerHTML = "";
+    var q = "/api/tree?root=" + encodeURIComponent(root);
+    if (depth) q += "&depth=" + depth;
+    return fetch(q).then(function (r) { return r.json(); }).then(function (tree) {
+      if (tree.error) throw new Error(tree.error);
+      var ul = document.createElement("ul");
+      ul.appendChild(renderNode(tree, 0));
+      host.innerHTML = "";
+      host.appendChild(ul);
+    }).catch(function () {
+      host.innerHTML = "<p class='empty'>That directory did not open.</p>";
+    });
+  }
+
+  function showSplit() {
+    treeEl.className = "split-view";
+    treeEl.innerHTML = "";
+    SPLIT.forEach(function (path) {
+      var pane = document.createElement("section");
+      pane.className = "pane";
+      var title = document.createElement("h2");
+      title.textContent = path.split(/[\\/]/).filter(Boolean).pop() || path;
+      var body = document.createElement("div");
+      pane.appendChild(title);
+      pane.appendChild(body);
+      treeEl.appendChild(pane);
+      fill(body, path, 1);
+    });
+  }
+
+  function select(i) {
+    active = i;
+    paintTabs();
+    if (i < 0) {
+      card.classList.remove("open");
+      cardBody.innerHTML = "";
+      return;
+    }
+    card.classList.add("open");
+    fill(cardBody, roots[i]);
+  }
+
+  function cycle(step) {
+    if (!roots.length) return;
+    var next = active < 0 ? 0 : (active + step + roots.length) % roots.length;
+    select(next);
+  }
+
+  document.getElementById("add").addEventListener("click", function () {
+    if (spine.classList.contains("collapsed")) spine.classList.remove("collapsed");
+    field.classList.toggle("open");
+    note.textContent = "";
+    if (field.classList.contains("open")) dir.focus();
+  });
+
+  field.addEventListener("submit", function (e) {
+    e.preventDefault();
+    note.textContent = "";
+    fetch("/api/roots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: dir.value })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { note.textContent = "missing"; return; }
+        roots = res.j.roots || [];
+        dir.value = "";
+        field.classList.remove("open");
+        select(roots.indexOf(res.j.added));
+      });
+  });
+
+  var drag = null;
+  split.addEventListener("pointerdown", function (e) {
+    drag = { x: e.clientX, moved: false };
+    split.setPointerCapture(e.pointerId);
+  });
+  split.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true;
+    if (!drag.moved) return;
+    spine.classList.remove("collapsed");
+    wide = Math.max(120, e.clientX);
+    spine.style.width = wide + "px";
+  });
+  split.addEventListener("pointerup", function () {
+    if (drag && !drag.moved) {
+      var shut = spine.classList.toggle("collapsed");
+      spine.style.width = shut ? "44px" : wide + "px";
+    }
+    drag = null;
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.closest("input, textarea")) return;
+    var hit = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    binds.forEach(function (b) {
+      var keys = b.keys || [];
+      var matched = keys.some(function (k) { return k.toUpperCase() === hit.toUpperCase(); });
+      if (!matched) return;
+      if (b.bind === "spine.tab.nav") { e.preventDefault(); cycle(e.shiftKey ? -1 : 1); }
+      if (b.bind === "spine.shortcut") { e.preventDefault(); spine.focus(); }
+    });
+  });
+
+  fetch("/api/keybinds").then(function (r) { return r.json(); }).then(function (j) {
+    binds = j.binds || [];
+  });
+  fetch("/api/roots").then(function (r) { return r.json(); }).then(function (j) {
+    roots = j.roots || [];
+    paintTabs();
+    var pick = -1;
+    roots.forEach(function (path, i) {
+      var name = String(path).replace(/[\\/]+$/, "").split(/[\\/]/).pop();
+      if (name && name.toLowerCase() === "artifact-scanner") pick = i;
+    });
+    if (pick >= 0) select(pick);
+  });
+  showSplit();
+})();
+</script>
+</body>
+</html>
