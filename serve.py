@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent
 PAGE = ROOT / "bowser.html"
 BINDS = ROOT / "keybinds.csv"
 SAVED = ROOT / "roots.json"
-PORT = 8741
+PORT = int(os.environ.get("PORT") or 8741)
 DEFAULT_ROOTS = (r"C:\dev", r"C:\Users\bardw\durable")
 IGNORED_DIRS = {
     ".git", "node_modules", "venv", ".venv", "__pycache__",
@@ -158,10 +158,11 @@ def known_root(path: str) -> str | None:
         return None
     for saved in list(DEFAULT_ROOTS) + load_roots():
         try:
-            if str(Path(saved).resolve()) == resolved:
-                return resolved
+            base = Path(saved).resolve()
         except OSError:
             continue
+        if Path(resolved) == base or base in Path(resolved).parents:
+            return resolved
     return None
 
 

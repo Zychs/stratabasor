@@ -11,6 +11,8 @@
     --soft: #8ea4bc;
     --line: #243244;
     --row: #16202b;
+    --picked: #141e2a;
+    --rule: #121b24;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
@@ -26,8 +28,14 @@
     margin: 0; width: 100%; min-height: 52px; padding: 16px 18px;
     font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
   }
-  #tabs { overflow: auto; padding: 0 8px 12px; }
+  #tabs { flex: 1; overflow: auto; padding: 0 8px 12px; }
   #spine.collapsed #tabs { display: none; }
+  #tint-open {
+    appearance: none; border: 0; background: transparent; color: var(--soft);
+    margin: 0; padding: 14px 18px; text-align: left; font: inherit; cursor: pointer;
+  }
+  #tint-open:hover { color: var(--ink); }
+  #spine.collapsed #tint-open span { display: none; }
   .tab {
     display: block; width: 100%; text-align: left; margin: 0 0 4px;
     padding: 8px 10px; border: 0; border-radius: 2px; background: transparent;
@@ -46,16 +54,36 @@
   #stage { position: relative; flex: 1; min-height: 0; }
   #tree { height: 100%; min-height: 0; overflow: auto; padding: 8px 0 24px; }
   #tree.split-view { display: flex; padding: 0; overflow: hidden; }
-  #card {
+  .pane { flex: 1; min-width: 0; overflow: auto; }
+  .pane.picked { background: var(--picked); }
+  #tint {
     display: none; position: absolute; z-index: 2;
-    top: 72px; left: 20px; right: 20px; bottom: 18%;
-    flex-direction: column; min-height: 0;
-    background: #141e2a; border: 1px solid var(--line);
+    top: 72px; left: 20px; right: 20px; max-height: calc(100% - 96px);
+    flex-direction: column; gap: 18px; overflow: auto; padding: 16px 20px 20px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
   }
-  #card.open { display: flex; }
-  #card-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 16px; }
-  .pane { flex: 1; min-width: 0; overflow: auto; }
+  #tint.open { display: flex; }
+  #tint header { display: flex; align-items: center; justify-content: space-between; }
+  #tint h2, #tint h3 {
+    margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--soft);
+  }
+  #tint h3 { margin-bottom: 8px; }
+  #tint-close {
+    appearance: none; border: 0; background: transparent; color: var(--soft);
+    font: inherit; font-size: 20px; line-height: 1; padding: 4px 8px; cursor: pointer;
+  }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch {
+    appearance: none; width: 84px; padding: 10px 8px 8px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 6px; text-align: left; font: inherit;
+    border: 1px solid; border-radius: 2px;
+  }
+  .swatch b { font-size: 20px; font-weight: 600; line-height: 1; }
+  .swatch i { font-style: normal; font-size: 11px; padding-top: 6px; border-top: 1px solid; }
+  .swatch.on { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .row.sel { background: var(--row); }
   .pane + .pane { border-left: 1px solid var(--line); }
   .pane h2 {
     margin: 0; padding: 12px 12px 0; font-size: 12px; font-weight: 600;
@@ -68,11 +96,25 @@
   .row {
     display: flex; align-items: center; gap: 8px; width: 100%;
     text-align: left; background: transparent; color: var(--ink);
-    border: 0; padding: 6px 10px; font: inherit; cursor: pointer;
+    border: 0; border-bottom: 1px solid var(--rule);
+    padding: 6px 10px; font: inherit; cursor: pointer;
   }
   .row:hover { background: var(--row); }
   .mark { color: var(--soft); width: 1.2em; }
-  .kind { color: var(--soft); font-size: 12px; letter-spacing: 0.04em; }
+  .kind {
+    color: var(--chip-ink, var(--soft)); background: var(--chip, transparent);
+    font-size: 12px; letter-spacing: 0.04em; padding: 1px 6px; border-radius: 2px;
+  }
+  .row { box-shadow: inset 3px 0 0 var(--chip, transparent); }
+  .row.sel { box-shadow: inset 3px 0 0 var(--ink); }
+  .profiles { display: flex; flex-wrap: wrap; gap: 6px; }
+  .profile {
+    appearance: none; font: inherit; font-size: 14px; cursor: pointer;
+    padding: 6px 12px; border: 1px solid var(--line); border-radius: 2px;
+    background: transparent; color: var(--ink);
+  }
+  .profile.on { background: var(--row); border-color: var(--ink); }
+  .profile small { display: block; color: var(--soft); font-size: 11px; }
 </style>
 </head>
 <body>
@@ -80,6 +122,7 @@
   <aside id="spine">
     <button id="add" type="button" aria-label="add directory">+</button>
     <nav id="tabs"></nav>
+    <button id="tint-open" type="button" aria-label="background color">&#9680; <span>colors</span></button>
   </aside>
   <div id="split" title="drag to resize, click to collapse"></div>
   <main id="main">
@@ -89,8 +132,11 @@
     </form>
     <div id="stage">
       <div id="tree" class="split-view"></div>
-      <section id="card" aria-label="selected directory">
-        <div id="card-body"></div>
+      <section id="tint" aria-label="background color">
+        <header><h2>Background behind text</h2><button id="tint-close" type="button" aria-label="close">&times;</button></header>
+        <div><h3>Profile</h3><div id="profiles" class="profiles"></div></div>
+        <div><h3>Blue</h3><div class="swatches" data-hue="212" data-sat="34"></div></div>
+        <div><h3>Blue's complement</h3><div class="swatches" data-hue="32" data-sat="30"></div></div>
       </section>
     </div>
   </main>
@@ -104,8 +150,9 @@
   var note = document.getElementById("note");
   var tabsEl = document.getElementById("tabs");
   var treeEl = document.getElementById("tree");
-  var card = document.getElementById("card");
-  var cardBody = document.getElementById("card-body");
+  var pickedTitle = null;
+  var pickedBody = null;
+  var selRow = null;
   var roots = [];
   var active = -1;
   var binds = [];
@@ -131,17 +178,65 @@
     if (node.type === "branch_group") return "branches";
     if (node.type === "repository") return "repo";
     if (node.type === "directory") return "folder";
-    return "file";
+    return fileKind(node.name);
   }
 
-  function renderNode(node, depth) {
+  var EXT = {
+    code: "js ts tsx jsx mjs cjs py rs go c h cpp hpp cs java kt swift rb php lua sh ps1 psm1 bat cmd html css scss vue svelte",
+    doc: "md txt rst adoc pdf doc docx rtf",
+    data: "json jsonl csv tsv yaml yml toml xml sql db sqlite parquet ndjson",
+    config: "ini cfg conf env lock stamp editorconfig gitignore gitattributes",
+    media: "png jpg jpeg gif svg webp ico bmp mp4 mov webm mp3 wav ogg ttf otf woff woff2"
+  };
+  var EXT_KIND = {};
+  Object.keys(EXT).forEach(function (k) { EXT[k].split(" ").forEach(function (e) { EXT_KIND[e] = k; }); });
+
+  function fileKind(name) {
+    var n = String(name || "").toLowerCase();
+    var dot = n.lastIndexOf(".");
+    if (dot === 0) return EXT_KIND[n.slice(1)] || "config";
+    return (dot > 0 && EXT_KIND[n.slice(dot + 1)]) || "file";
+  }
+
+  // The tone a row wears. Profiles map these to colors.
+  function toneOf(node) {
+    if (node.type === "repository") return "repo";
+    if (node.type === "directory") return node.name && node.name.charAt(0) === "." ? "hidden" : "folder";
+    if (node.type === "branch_group") return "branches";
+    if (node.type === "branch_local") return node.is_current ? "head" : "local";
+    if (node.type === "branch_remote") return "remote";
+    return fileKind(node.name);
+  }
+
+  // Anything larger than a single file: folder, repo, or a branch group.
+  function isWhole(node) {
+    return node.type === "directory" || node.type === "repository" || node.type === "branch_group";
+  }
+
+  function pick(node, row) {
+    if (selRow) selRow.classList.remove("sel");
+    selRow = row || null;
+    if (selRow) selRow.classList.add("sel");
+    pickedTitle.textContent = node.name || "?";
+    pickedTitle.title = node.path || "";
+    if (node.path) {
+      fill(pickedBody, node.path, 0, true);
+      return;
+    }
+    var ul = document.createElement("ul");
+    ul.appendChild(renderNode(node, 0, true));
+    pickedBody.innerHTML = "";
+    pickedBody.appendChild(ul);
+  }
+
+  function renderNode(node, depth, inPicked) {
     var li = document.createElement("li");
     var kids = node.children || [];
     var openFirst = depth === 0 || node.type === "branch_group";
     if (!openFirst) li.className = "shut";
     var row = document.createElement("button");
     row.type = "button";
-    row.className = "row";
+    row.className = "row t-" + toneOf(node);
     var mark = document.createElement("span");
     mark.className = "mark";
     mark.textContent = kids.length ? (openFirst ? "v" : ">") : "";
@@ -154,28 +249,31 @@
     row.appendChild(name);
     row.appendChild(kind);
     row.addEventListener("click", function () {
-      if (!kids.length) return;
-      var shut = li.classList.toggle("shut");
-      mark.textContent = shut ? ">" : "v";
+      if (kids.length) {
+        var shut = li.classList.toggle("shut");
+        mark.textContent = shut ? ">" : "v";
+      }
+      if (!inPicked && depth > 0 && isWhole(node)) pick(node, row);
     });
     li.appendChild(row);
     if (kids.length) {
       var ul = document.createElement("ul");
       ul.className = "kids";
-      kids.forEach(function (ch) { ul.appendChild(renderNode(ch, depth + 1)); });
+      kids.forEach(function (ch) { ul.appendChild(renderNode(ch, depth + 1, inPicked)); });
       li.appendChild(ul);
     }
     return li;
   }
 
-  function fill(host, root, depth) {
+  function fill(host, root, depth, inPicked) {
     host.innerHTML = "";
     var q = "/api/tree?root=" + encodeURIComponent(root);
     if (depth) q += "&depth=" + depth;
     return fetch(q).then(function (r) { return r.json(); }).then(function (tree) {
       if (tree.error) throw new Error(tree.error);
+      if (host === pickedBody && pickedTitle.title !== root) return;
       var ul = document.createElement("ul");
-      ul.appendChild(renderNode(tree, 0));
+      ul.appendChild(renderNode(tree, 0, inPicked));
       host.innerHTML = "";
       host.appendChild(ul);
     }).catch(function () {
@@ -197,18 +295,23 @@
       treeEl.appendChild(pane);
       fill(body, path, 1);
     });
+    var picked = document.createElement("section");
+    picked.className = "pane picked";
+    pickedTitle = document.createElement("h2");
+    pickedTitle.textContent = "selected";
+    pickedBody = document.createElement("div");
+    pickedBody.innerHTML = "<p class='empty'>Pick a folder, repo, or branch group.</p>";
+    picked.appendChild(pickedTitle);
+    picked.appendChild(pickedBody);
+    treeEl.appendChild(picked);
   }
 
   function select(i) {
     active = i;
     paintTabs();
-    if (i < 0) {
-      card.classList.remove("open");
-      cardBody.innerHTML = "";
-      return;
-    }
-    card.classList.add("open");
-    fill(cardBody, roots[i]);
+    if (i < 0) return;
+    var path = roots[i];
+    pick({ name: path.split(/[\\/]/).filter(Boolean).pop() || path, path: path });
   }
 
   function cycle(step) {
@@ -216,6 +319,191 @@
     var next = active < 0 ? 0 : (active + step + roots.length) % roots.length;
     select(next);
   }
+
+  // Background picker. One hue per row; swatches differ only in brightness.
+  // Text, lines, and raised surfaces are derived from the pick, never chosen.
+  var tint = document.getElementById("tint");
+  var STEPS = [4, 7, 10, 13, 16, 19, 22, 80, 84, 88, 92, 95, 98];
+  var INK = 7;     // WCAG AAA body text, checked on every surface text sits on
+  var SOFT = 4.5;  // WCAG AA for labels and kinds
+  var TINT_KEY = "stratabasor.tint";
+
+  function rgb(h, s, l) {
+    s /= 100; l /= 100;
+    var a = s * Math.min(l, 1 - l);
+    function f(n) {
+      var k = (n + h / 30) % 12;
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    }
+    return [f(0), f(8), f(4)];
+  }
+  function hex(c) { return "#" + c.map(function (v) { return (v < 16 ? "0" : "") + v.toString(16); }).join(""); }
+  function lum(c) {
+    var v = c.map(function (x) { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  }
+  function ratio(a, b) {
+    var x = lum(a), y = lum(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+
+  // Walk brightness away from the background until every surface clears `need`.
+  // Returns the gentlest tone that does, or null when none can.
+  // `s` is the tone's saturation; `bs` the surfaces' (defaults to the same).
+  function toneFor(h, s, surfaces, dir, need, bs) {
+    if (bs == null) bs = s;
+    for (var l = surfaces[0]; l >= 0 && l <= 100; l += dir) {
+      var c = rgb(h, s, l);
+      var worst = Math.min.apply(null, surfaces.map(function (sl) { return ratio(c, rgb(h, bs, sl)); }));
+      if (worst >= need) return { c: c, l: l, worst: worst };
+    }
+    return null;
+  }
+
+  function theme(h, s, l) {
+    var dir = l < 50 ? 1 : -1;
+    var surf = { bg: l, panel: l + dir * 3, picked: l + dir * 5, row: l + dir * 8 };
+    var all = [surf.bg, surf.panel, surf.picked, surf.row];
+    var textSat = s * 0.45;
+    var ink = toneFor(h, textSat, all, dir, INK + 3, s) || toneFor(h, textSat, all, dir, INK, s);
+    var soft = toneFor(h, textSat, all, dir, SOFT + 0.8, s) || toneFor(h, textSat, all, dir, SOFT, s);
+    if (!ink || !soft) return null;
+    // Lines take the same hue, stepped in brightness: plain dividers and the faint rule between rows.
+    var line = toneFor(h, s, [surf.bg], dir, 1.9) || toneFor(h, s, [surf.bg], dir, 1.4);
+    var rule = toneFor(h, s, [surf.bg], dir, 1.25);
+    return {
+      "--bg": hex(rgb(h, s, surf.bg)),
+      "--panel": hex(rgb(h, s, surf.panel)),
+      "--picked": hex(rgb(h, s, surf.picked)),
+      "--row": hex(rgb(h, s, surf.row)),
+      "--ink": hex(ink.c),
+      "--soft": hex(soft.c),
+      "--line": hex(line.c),
+      "--rule": hex(rule.c),
+      worst: ink.worst
+    };
+  }
+
+  // Two families only. Inside a family, tones differ by brightness alone.
+  var FAM = { b: { h: 212, s: 34 }, c: { h: 32, s: 30 } };
+  // A profile maps a tone to [family, brightness step away from the background].
+  // A missing tone wears no chip.
+  var PROFILES = [
+    { id: "kinds", name: "Kinds", note: "every type has a tone", map: {
+      repo: ["c", 16], folder: ["b", 5], hidden: ["b", 2], branches: ["b", 9],
+      head: ["c", 22], local: ["b", 13], remote: ["b", 3],
+      code: ["c", 12], doc: ["b", 17], data: ["c", 7], config: ["b", 8], media: ["c", 3], file: ["b", 1] } },
+    { id: "files", name: "Files", note: "files lead, folders quiet", map: {
+      repo: ["b", 6], folder: ["b", 2], hidden: ["b", 1], branches: ["b", 4], head: ["b", 8],
+      code: ["c", 18], doc: ["b", 18], data: ["c", 10], config: ["b", 10], media: ["c", 4], file: ["b", 3] } },
+    { id: "repos", name: "Repos", note: "repos and branches only", map: {
+      repo: ["c", 18], branches: ["b", 8], head: ["c", 12], local: ["b", 12], remote: ["b", 4] } },
+    { id: "off", name: "Off", note: "no type color", map: {} }
+  ];
+  var PROFILE_KEY = "stratabasor.profile";
+  var DEFAULT_PICK = { h: 212, s: 34, l: 7 };
+  var current = { pick: DEFAULT_PICK, profile: PROFILES[0] };
+  var toneSheet = document.createElement("style");
+  document.head.appendChild(toneSheet);
+
+  // Step toward the chip's own ink side until its label can still clear AAA.
+  function chip(fam, baseL, dir, step) {
+    for (var st = step; st >= 1; st--) {
+      var l = baseL + dir * st;
+      var ts = fam.s * 0.45;
+      var ink = toneFor(fam.h, ts, [l], dir, INK, fam.s) || toneFor(fam.h, ts, [l], -dir, INK, fam.s);
+      if (ink) return { bg: hex(rgb(fam.h, fam.s, l)), ink: hex(ink.c) };
+    }
+    return null;
+  }
+
+  function paintTones() {
+    var dir = current.pick.l < 50 ? 1 : -1;
+    var map = current.profile.map;
+    toneSheet.textContent = Object.keys(map).map(function (tone) {
+      var c = chip(FAM[map[tone][0]], current.pick.l, dir, map[tone][1]);
+      return c ? ".t-" + tone + " { --chip: " + c.bg + "; --chip-ink: " + c.ink + "; }" : "";
+    }).join("\n");
+    document.querySelectorAll(".profile").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.id === current.profile.id);
+    });
+  }
+
+  var profilesEl = document.getElementById("profiles");
+  PROFILES.forEach(function (p) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "profile";
+    b.dataset.id = p.id;
+    b.innerHTML = "<span></span><small></small>";
+    b.firstChild.textContent = p.name;
+    b.lastChild.textContent = p.note;
+    b.addEventListener("click", function () {
+      current.profile = p;
+      paintTones();
+      try { localStorage.setItem(PROFILE_KEY, p.id); } catch (e) {}
+    });
+    profilesEl.appendChild(b);
+  });
+
+  function applyTint(pick) {
+    var t = theme(pick.h, pick.s, pick.l);
+    if (!t) return false;
+    current.pick = pick;
+    Object.keys(t).forEach(function (k) {
+      if (k.charAt(0) === "-") document.documentElement.style.setProperty(k, t[k]);
+    });
+    paintTones();
+    tint.querySelectorAll(".swatch").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.key === pick.h + ":" + pick.l);
+    });
+    return true;
+  }
+
+  tint.querySelectorAll(".swatches").forEach(function (host) {
+    var h = +host.dataset.hue, s = +host.dataset.sat;
+    STEPS.forEach(function (l) {
+      var t = theme(h, s, l);
+      if (!t) return; // text cannot be made safe on this brightness
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "swatch";
+      b.dataset.key = h + ":" + l;
+      b.style.background = t["--bg"];
+      b.style.color = t["--ink"];
+      b.style.borderColor = t["--line"];
+      b.title = "text contrast " + t.worst.toFixed(1) + ":1 on every surface";
+      b.innerHTML = "<b>Aa</b><i></i>";
+      var i = b.querySelector("i");
+      i.textContent = t.worst.toFixed(1) + ":1";
+      i.style.color = t["--soft"];
+      i.style.borderColor = t["--line"];
+      b.addEventListener("click", function () {
+        var pick = { h: h, s: s, l: l };
+        applyTint(pick);
+        try { localStorage.setItem(TINT_KEY, JSON.stringify(pick)); } catch (e) {}
+      });
+      host.appendChild(b);
+    });
+  });
+
+  var saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(TINT_KEY) || "null");
+    var pid = localStorage.getItem(PROFILE_KEY);
+    PROFILES.forEach(function (p) { if (p.id === pid) current.profile = p; });
+  } catch (e) {}
+  if (!saved || !applyTint(saved)) applyTint(DEFAULT_PICK);
+
+  document.getElementById("tint-open").addEventListener("click", function () {
+    tint.classList.toggle("open");
+  });
+  document.getElementById("tint-close").addEventListener("click", function () {
+    tint.classList.remove("open");
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") tint.classList.remove("open");
+  });
 
   document.getElementById("add").addEventListener("click", function () {
     if (spine.classList.contains("collapsed")) spine.classList.remove("collapsed");

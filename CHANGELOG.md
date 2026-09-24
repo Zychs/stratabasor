@@ -15,6 +15,12 @@ Reverse-chronological. Dates are local. No version scheme. Stay on Unreleased.
 
 - The second Vision corpse. One corpse is named. Do not guess the other.
 
+### Changed
+
+- 2026-09-24: The selected directory is a third column beside dev and durable, not a card over them. It changes whenever a folder, repo, or branch group is picked. A file pick leaves it alone.
+- 2026-09-24: The overlay card is now the background picker, opened from `colors` at the foot of the spine. Blue and its complement, each varying only in brightness. Text and line tones are derived from the pick; a swatch is only offered when body text clears 7:1 on every surface it sits on.
+- 2026-09-24: Rows carry a type tone: repo, folder, hidden folder, branches, head, local, remote, and files sorted into code, doc, data, config, media. The tone is an edge bar and a chip behind the kind label. Profiles (Kinds, Files, Repos, Off) in the color overlay decide which types get which tone. Chip labels clear 7:1 against their own chip.
+
 ### Added
 
 - Local browser, fullscreen, resizable collapsing spine, keybinds file.
