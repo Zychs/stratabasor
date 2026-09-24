@@ -43,12 +43,22 @@
     font: inherit; padding: 8px 10px;
   }
   #note { color: var(--soft); align-self: center; }
-  #stage { position: relative; flex: 1; min-height: 0; }
-  #tree { height: 100%; min-height: 0; overflow: auto; padding: 8px 0 24px; }
+  /* stratabasor is the main card. The selected repo is its companion card,
+     beside it and offset down, so neither covers the other's lines. */
+  #stage { display: flex; gap: 16px; flex: 1; min-height: 0; padding: 12px 20px 20px; }
+  #tree {
+    flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 8px 0 24px;
+    background: var(--panel); border: 1px solid var(--line);
+  }
   #tree.split-view { display: flex; padding: 0; overflow: hidden; }
+  #dock {
+    flex: none; width: min(520px, 42%); margin-top: 60px;
+    display: flex; flex-direction: column; justify-content: flex-end; gap: 12px;
+    min-height: 0;
+  }
+  #dock:not(:has(.open)) { display: none; }
   #card {
-    display: none; position: absolute; z-index: 2;
-    top: 72px; left: 20px; right: 20px; bottom: 18%;
+    display: none; flex: 1 1 0;
     flex-direction: column; min-height: 0;
     background: #141e2a; border: 1px solid var(--line);
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
@@ -68,11 +78,31 @@
   .row {
     display: flex; align-items: center; gap: 8px; width: 100%;
     text-align: left; background: transparent; color: var(--ink);
-    border: 0; padding: 6px 10px; font: inherit; cursor: pointer;
+    border: 0; padding: 6px 10px; font: inherit; cursor: pointer; white-space: nowrap;
   }
   .row:hover { background: var(--row); }
   .mark { color: var(--soft); width: 1.2em; }
   .kind { color: var(--soft); font-size: 12px; letter-spacing: 0.04em; }
+  #tip {
+    display: none; flex: 0 0 auto; max-height: 45%;
+    overflow: auto; padding: 10px 14px 12px;
+    background: #182431; border: 1px solid var(--line);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+    font-size: 13px; line-height: 1.45;
+  }
+  #tip.open { display: block; }
+  #tip .shut-x {
+    float: right; margin: -4px -6px 0 8px; padding: 0 6px;
+    background: transparent; border: 0; color: var(--soft); font: inherit; font-size: 16px;
+    cursor: pointer;
+  }
+  #tip .meter { display: flex; gap: 3px; margin-bottom: 6px; }
+  #tip .meter i { flex: 1; height: 2px; background: var(--line); }
+  #tip .meter i.on { background: var(--soft); }
+  #tip .head { font-weight: 600; word-break: break-all; }
+  #tip dl { margin: 4px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 1px 10px; }
+  #tip dt { color: var(--soft); }
+  #tip dd { margin: 0; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -89,9 +119,12 @@
     </form>
     <div id="stage">
       <div id="tree" class="split-view"></div>
-      <section id="card" aria-label="selected directory">
-        <div id="card-body"></div>
-      </section>
+      <div id="dock">
+        <section id="tip" aria-label="hovered row" aria-live="polite"></section>
+        <section id="card" aria-label="selected directory">
+          <div id="card-body"></div>
+        </section>
+      </div>
     </div>
   </main>
 </div>
@@ -126,7 +159,10 @@
   }
 
   function kindWord(node) {
-    if (node.type === "branch_local") return node.is_current ? "local head" : "local";
+    if (node.type === "branch_local") {
+      if (node.is_current) return "local head";
+      return node.in_worktree ? "local, other worktree" : "local";
+    }
     if (node.type === "branch_remote") return "remote";
     if (node.type === "branch_group") return "branches";
     if (node.type === "repository") return "repo";
@@ -153,6 +189,7 @@
     row.appendChild(mark);
     row.appendChild(name);
     row.appendChild(kind);
+    row.tipNode = node;
     row.addEventListener("click", function () {
       if (!kids.length) return;
       var shut = li.classList.toggle("shut");
@@ -167,6 +204,172 @@
     }
     return li;
   }
+
+  // Hover tips. Where the pointer sits across a row sets how much the tip says:
+  // the left edge is the name, the right edge is everything, git detail included.
+  var tip = document.getElementById("tip");
+  var TIERS = 4;
+  var tipRow = null;
+  var tipTier = -1;
+  var tipTimer = 0;
+  var detailCache = {};
+
+  function tierAt(row, x) {
+    var r = row.getBoundingClientRect();
+    var f = r.width ? (x - r.left) / r.width : 0;
+    return Math.max(0, Math.min(TIERS - 1, Math.floor(f * TIERS)));
+  }
+
+  function bytes(n) {
+    if (n == null) return null;
+    var u = ["B", "KB", "MB", "GB"];
+    var i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i ? n.toFixed(1) : n) + " " + u[i];
+  }
+
+  function when(sec) {
+    return sec == null ? null : new Date(sec * 1000).toLocaleString();
+  }
+
+  function counts(node) {
+    var c = { folder: 0, file: 0, branch: 0 };
+    (node.children || []).forEach(function (ch) {
+      if (ch.type === "file") c.file++;
+      else if (ch.type === "branch_group") c.branch += (ch.children || []).length;
+      else if (ch.type === "branch_local" || ch.type === "branch_remote") c.branch++;
+      else c.folder++;
+    });
+    var out = [];
+    if (c.folder) out.push(c.folder + (c.folder > 1 ? " folders" : " folder"));
+    if (c.file) out.push(c.file + (c.file > 1 ? " files" : " file"));
+    if (c.branch) out.push(c.branch + (c.branch > 1 ? " branches" : " branch"));
+    return out.join(", ") || null;
+  }
+
+  function detailKey(node) {
+    if (node.type === "branch_local" || node.type === "branch_remote") {
+      return node.repo ? node.repo + "|" + node.name : null;
+    }
+    if (node.type === "file" || node.type === "branch_group") return null;
+    return node.path || null;
+  }
+
+  function askDetail(node) {
+    var key = detailKey(node);
+    if (!key || detailCache[key]) return;
+    var q = "/api/detail?path=" + encodeURIComponent(node.repo || node.path);
+    if (node.repo) q += "&branch=" + encodeURIComponent(node.name);
+    detailCache[key] = { pending: true };
+    fetch(q).then(function (r) { return r.json(); }).then(function (j) {
+      detailCache[key] = j.error ? {} : j;
+    }).catch(function () {
+      detailCache[key] = {};
+    }).then(function () {
+      if (tipRow && tipRow.tipNode === node && tipTier === TIERS - 1) showTip();
+    });
+  }
+
+  function tipLines(node, tier) {
+    var lines = [];
+    function add(label, value) { if (value != null && value !== "") lines.push([label, value]); }
+    if (tier >= 1) {
+      add("in", node.rel_path);
+      if (node.type === "repository") add("on", node.current_branch);
+      if (node.repo) add("repo", node.repo.split(/[\\/]/).filter(Boolean).pop());
+      add("holds", counts(node));
+    }
+    if (tier >= 2) {
+      add("path", node.path);
+      add("size", bytes(node.size));
+      add("changed", when(node.mtime));
+    }
+    if (tier >= 3) {
+      var key = detailKey(node);
+      var d = key && detailCache[key];
+      if (d && d.pending) add("git", "reading…");
+      if (d && d.entries != null) add("on disk", d.entries + " entries");
+      if (d && d.commit) {
+        add("last", d.commit.hash + " " + d.commit.subject);
+        add("by", d.commit.author + ", " + new Date(d.commit.date).toLocaleString());
+      }
+    }
+    return lines;
+  }
+
+  function paintTip() {
+    var node = tipRow.tipNode;
+    tip.innerHTML = "";
+    var x = document.createElement("button");
+    x.type = "button";
+    x.className = "shut-x";
+    x.setAttribute("aria-label", "close");
+    x.textContent = "×";
+    x.addEventListener("click", hideTip);
+    tip.appendChild(x);
+    var meter = document.createElement("div");
+    meter.className = "meter";
+    for (var i = 0; i < TIERS; i++) {
+      var seg = document.createElement("i");
+      if (i <= tipTier) seg.className = "on";
+      meter.appendChild(seg);
+    }
+    tip.appendChild(meter);
+    var head = document.createElement("div");
+    head.className = "head";
+    head.textContent = (node.name || "?") + "  ·  " + kindWord(node);
+    tip.appendChild(head);
+    var lines = tipLines(node, tipTier);
+    if (!lines.length) return;
+    var dl = document.createElement("dl");
+    lines.forEach(function (pair) {
+      var dt = document.createElement("dt");
+      dt.textContent = pair[0];
+      var dd = document.createElement("dd");
+      dd.textContent = pair[1];
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    tip.appendChild(dl);
+  }
+
+  // The companion card is docked lower right, apart from the rows. It keeps the
+  // last row hovered, so the pointer can leave the tree and the card stays.
+  function showTip() {
+    paintTip();
+    tip.classList.add("open");
+  }
+
+  function hideTip() {
+    clearTimeout(tipTimer);
+    tipRow = null;
+    tipTier = -1;
+    tip.classList.remove("open");
+  }
+
+  document.addEventListener("pointermove", function (e) {
+    var row = e.target.closest ? e.target.closest(".row") : null;
+    if (!row || !row.tipNode || e.pointerType === "touch") {
+      clearTimeout(tipTimer);
+      return;
+    }
+    var tier = tierAt(row, e.clientX);
+    if (row !== tipRow) {
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(function () {
+        tipRow = row;
+        tipTier = tier;
+        showTip();
+        if (tipTier === TIERS - 1) askDetail(row.tipNode);
+      }, 180);
+      return;
+    }
+    if (tier !== tipTier) {
+      tipTier = tier;
+      showTip();
+      if (tier === TIERS - 1) askDetail(row.tipNode);
+    }
+  });
 
   function fill(host, root, depth) {
     host.innerHTML = "";
@@ -263,6 +466,7 @@
   });
 
   document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") hideTip();
     if (e.target.closest("input, textarea")) return;
     var hit = e.key.length === 1 ? e.key.toUpperCase() : e.key;
     binds.forEach(function (b) {
