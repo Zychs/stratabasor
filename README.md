@@ -2,9 +2,15 @@
 
 Local browser for one job: show a repo the way AyTree's tree tool does. Folders, and the branches on that repo.
 
-The left spine starts empty. The plus has no border and a wide hit area. It opens a field in the window. It does not fullscreen.
+The left spine starts empty. The plus has no border and a wide hit area. It opens a field in the window. It does not fullscreen. The arrow at its top folds it to a strip and back. It remembers.
 
 The main pane opens as a split: dev on one side, durable on the other. Folders, and branches on any repo in that first level. That split is the main card. A chosen directory opens as its companion card, beside it and offset down from the top.
+
+## Columns
+
+Each column header names its folder. Click it and type another. The arrow steps up one folder. The choice is kept in `columns.json`, next to `roots.json`. Not in git.
+
+Click a folder or repo in a column and it opens in the companion card. The row is marked. The spine tab lights only when the selection is one of its roots. The chevron expands a row instead. Deeper folders load when opened.
 
 ## Hover
 

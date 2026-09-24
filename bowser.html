@@ -21,11 +21,15 @@
     display: flex; flex-direction: column; min-height: 0;
   }
   #spine.collapsed { width: 44px; }
-  #add {
+  #spine-top { display: flex; align-items: stretch; }
+  #add, #fold {
     appearance: none; border: 0; outline: 0; background: transparent; color: var(--ink);
-    margin: 0; width: 100%; min-height: 52px; padding: 16px 18px;
-    font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
+    margin: 0; min-height: 52px; font: inherit; line-height: 1; cursor: pointer;
   }
+  #add { flex: 1; padding: 16px 18px; font-size: 22px; text-align: left; }
+  #fold { flex: none; width: 44px; color: var(--soft); font-size: 18px; }
+  #fold:hover, #add:hover { color: var(--ink); background: var(--row); }
+  #spine.collapsed #add { display: none; }
   #tabs { overflow: auto; padding: 0 8px 12px; }
   #spine.collapsed #tabs { display: none; }
   .tab {
@@ -65,12 +69,40 @@
   }
   #card.open { display: flex; }
   #card-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 0 16px; }
+  #card-head {
+    display: flex; align-items: baseline; gap: 10px; padding: 10px 8px 8px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  #card-name { font-weight: 600; white-space: nowrap; }
+  #card-path {
+    flex: 1; min-width: 0; color: var(--soft); font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+  }
+  #card-x {
+    appearance: none; border: 0; background: transparent; color: var(--soft);
+    font: inherit; font-size: 16px; cursor: pointer; padding: 0 6px;
+  }
+  #card-x:hover { color: var(--ink); }
   .pane { flex: 1; min-width: 0; overflow: auto; }
   .pane + .pane { border-left: 1px solid var(--line); }
-  .pane h2 {
-    margin: 0; padding: 12px 12px 0; font-size: 12px; font-weight: 600;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft);
+  .pane { display: flex; flex-direction: column; min-height: 0; }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; }
+  .pane-head { display: flex; align-items: center; gap: 4px; padding: 8px 8px 4px 12px; }
+  .pane-head .title, .pane-head .up {
+    appearance: none; border: 0; background: transparent; color: var(--soft);
+    font: 600 12px/1.4 "Segoe UI", sans-serif; letter-spacing: 0.08em;
+    text-transform: uppercase; cursor: pointer; padding: 4px 6px;
   }
+  .pane-head .title {
+    flex: 1; min-width: 0; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pane-head .title:hover, .pane-head .up:hover { color: var(--ink); background: var(--row); }
+  .pane-head input {
+    flex: 1; min-width: 0; background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); font: 13px "Segoe UI", sans-serif; padding: 4px 6px;
+  }
+  .pane-head .bad { color: #d98b8b; font-size: 12px; }
   .empty { color: var(--soft); padding: 16px; }
   ul { list-style: none; margin: 0; padding: 0; }
   ul.kids { padding-left: 16px; }
@@ -81,7 +113,9 @@
     border: 0; padding: 6px 10px; font: inherit; cursor: pointer; white-space: nowrap;
   }
   .row:hover { background: var(--row); }
-  .mark { color: var(--soft); width: 1.2em; }
+  .row.sel { background: #1e2d3d; box-shadow: inset 3px 0 0 var(--soft); }
+  .mark { color: var(--soft); width: 1.4em; flex: none; text-align: center; border-radius: 2px; }
+  .mark.can:hover { background: var(--line); color: var(--ink); }
   .kind { color: var(--soft); font-size: 12px; letter-spacing: 0.04em; }
   #tip {
     display: none; flex: 0 0 auto; max-height: 45%;
@@ -96,6 +130,17 @@
     background: transparent; border: 0; color: var(--soft); font: inherit; font-size: 16px;
     cursor: pointer;
   }
+  /* Narrow windows: the companion drops under the main card, then the two
+     columns stack too, so nothing is squeezed to a sliver. */
+  @media (max-width: 1000px) {
+    #stage { flex-direction: column; padding: 10px; gap: 10px; }
+    #tree { flex: 1 1 55%; }
+    #dock { width: auto; margin-top: 0; flex: 1 1 45%; }
+  }
+  @media (max-width: 640px) {
+    #tree.split-view { flex-direction: column; }
+    .pane + .pane { border-left: 0; border-top: 1px solid var(--line); }
+  }
   #tip .meter { display: flex; gap: 3px; margin-bottom: 6px; }
   #tip .meter i { flex: 1; height: 2px; background: var(--line); }
   #tip .meter i.on { background: var(--soft); }
@@ -108,7 +153,10 @@
 <body>
 <div id="app">
   <aside id="spine">
-    <button id="add" type="button" aria-label="add directory">+</button>
+    <div id="spine-top">
+      <button id="fold" type="button" aria-label="collapse spine" title="collapse spine">&lsaquo;</button>
+      <button id="add" type="button" aria-label="add directory">+</button>
+    </div>
     <nav id="tabs"></nav>
   </aside>
   <div id="split" title="drag to resize, click to collapse"></div>
@@ -122,6 +170,11 @@
       <div id="dock">
         <section id="tip" aria-label="hovered row" aria-live="polite"></section>
         <section id="card" aria-label="selected directory">
+          <div id="card-head">
+            <span id="card-name"></span>
+            <span id="card-path"></span>
+            <button id="card-x" type="button" aria-label="close">&times;</button>
+          </div>
           <div id="card-body"></div>
         </section>
       </div>
@@ -139,11 +192,25 @@
   var treeEl = document.getElementById("tree");
   var card = document.getElementById("card");
   var cardBody = document.getElementById("card-body");
+  var fold = document.getElementById("fold");
+  var cardName = document.getElementById("card-name");
+  var cardPath = document.getElementById("card-path");
   var roots = [];
   var active = -1;
   var binds = [];
   var wide = 220;
-  var SPLIT = ["C:\\dev", "C:\\Users\\bardw\\durable"];
+  var columns = [];
+  var LABELS = ["dev", "durable"];
+  var selected = null;
+
+  function same(a, b) {
+    function norm(x) { return String(x || "").replace(/[\\/]+$/, "").toLowerCase(); }
+    return !!a && !!b && norm(a) === norm(b);
+  }
+
+  function leaf(path) {
+    return String(path).split(/[\\/]/).filter(Boolean).pop() || path;
+  }
 
   function paintTabs() {
     tabsEl.innerHTML = "";
@@ -151,9 +218,11 @@
       var b = document.createElement("button");
       b.type = "button";
       b.className = "tab" + (i === active ? " on" : "");
-      b.textContent = path.split(/[\\/]/).filter(Boolean).pop() || path;
+      b.textContent = leaf(path);
       b.title = path;
-      b.addEventListener("click", function () { select(i); });
+      b.addEventListener("click", function () {
+        if (i === active) selectPath(null); else selectPath(path);
+      });
       tabsEl.appendChild(b);
     });
   }
@@ -170,17 +239,27 @@
     return "file";
   }
 
-  function renderNode(node, depth) {
+  function canSelect(node) {
+    return node.type === "directory" || node.type === "repository";
+  }
+
+  // In the main card a row click selects that folder into the companion card and
+  // the chevron expands it. In the companion card a row click expands, as before.
+  function renderNode(node, depth, picks) {
     var li = document.createElement("li");
-    var kids = node.children || [];
     var openFirst = depth === 0 || node.type === "branch_group";
     if (!openFirst) li.className = "shut";
     var row = document.createElement("button");
     row.type = "button";
     row.className = "row";
+    if (picks && canSelect(node) && same(node.path, selected)) row.classList.add("sel");
     var mark = document.createElement("span");
     mark.className = "mark";
-    mark.textContent = kids.length ? (openFirst ? "v" : ">") : "";
+    function canOpen() { return (node.children || []).length > 0 || node.more; }
+    function paintMark() {
+      mark.textContent = canOpen() ? (li.classList.contains("shut") ? ">" : "v") : "";
+      mark.classList.toggle("can", canOpen());
+    }
     var name = document.createElement("span");
     name.textContent = node.name || "?";
     var kind = document.createElement("span");
@@ -190,18 +269,44 @@
     row.appendChild(name);
     row.appendChild(kind);
     row.tipNode = node;
-    row.addEventListener("click", function () {
-      if (!kids.length) return;
-      var shut = li.classList.toggle("shut");
-      mark.textContent = shut ? ">" : "v";
-    });
-    li.appendChild(row);
-    if (kids.length) {
-      var ul = document.createElement("ul");
+    row.dataset.path = node.path || "";
+    var ul = null;
+    function paintKids() {
+      if (ul) ul.remove();
+      ul = null;
+      var list = node.children || [];
+      if (!list.length) return;
+      ul = document.createElement("ul");
       ul.className = "kids";
-      kids.forEach(function (ch) { ul.appendChild(renderNode(ch, depth + 1)); });
+      list.forEach(function (ch) { ul.appendChild(renderNode(ch, depth + 1, picks)); });
       li.appendChild(ul);
     }
+    function toggle() {
+      if (!canOpen()) return;
+      var opening = li.classList.contains("shut");
+      if (opening && node.more) {
+        node.more = false;
+        mark.textContent = "\u2026";
+        loadTree(node.path, 1).then(function (fresh) {
+          var branches = (node.children || []).filter(function (c) { return c.type === "branch_group"; });
+          var rest = (fresh.children || []).filter(function (c) { return c.type !== "branch_group"; });
+          node.children = branches.concat(rest);
+          paintKids();
+          li.classList.remove("shut");
+          paintMark();
+        }).catch(function () { paintMark(); });
+        return;
+      }
+      li.classList.toggle("shut");
+      paintMark();
+    }
+    row.addEventListener("click", function (e) {
+      if (picks && canSelect(node) && e.target !== mark) { selectPath(node.path); return; }
+      toggle();
+    });
+    li.appendChild(row);
+    paintKids();
+    paintMark();
     return li;
   }
 
@@ -333,8 +438,8 @@
     tip.appendChild(dl);
   }
 
-  // The companion card is docked lower right, apart from the rows. It keeps the
-  // last row hovered, so the pointer can leave the tree and the card stays.
+  // The hover card stacks above the companion card. It keeps the last row
+  // hovered, so the pointer can leave the tree and the card stays.
   function showTip() {
     paintTip();
     tip.classList.add("open");
@@ -371,14 +476,20 @@
     }
   });
 
-  function fill(host, root, depth) {
-    host.innerHTML = "";
+  function loadTree(root, depth) {
     var q = "/api/tree?root=" + encodeURIComponent(root);
     if (depth) q += "&depth=" + depth;
     return fetch(q).then(function (r) { return r.json(); }).then(function (tree) {
       if (tree.error) throw new Error(tree.error);
+      return tree;
+    });
+  }
+
+  function fill(host, root, depth, picks) {
+    host.innerHTML = "";
+    return loadTree(root, depth).then(function (tree) {
       var ul = document.createElement("ul");
-      ul.appendChild(renderNode(tree, 0));
+      ul.appendChild(renderNode(tree, 0, picks));
       host.innerHTML = "";
       host.appendChild(ul);
     }).catch(function () {
@@ -386,32 +497,129 @@
     });
   }
 
-  function showSplit() {
-    treeEl.className = "split-view";
-    treeEl.innerHTML = "";
-    SPLIT.forEach(function (path) {
-      var pane = document.createElement("section");
-      pane.className = "pane";
-      var title = document.createElement("h2");
-      title.textContent = path.split(/[\\/]/).filter(Boolean).pop() || path;
-      var body = document.createElement("div");
-      pane.appendChild(title);
-      pane.appendChild(body);
-      treeEl.appendChild(pane);
-      fill(body, path, 1);
+  function setColumn(i, path, bad) {
+    return fetch("/api/columns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ index: i, path: path })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { if (bad) bad(); return; }
+        columns = res.j.columns || columns;
+        paintColumn(i);
+      });
+  }
+
+  function parentOf(path) {
+    var trimmed = String(path).replace(/[\\/]+$/, "");
+    var cut = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
+    if (cut <= 0) return null;
+    var up = trimmed.slice(0, cut);
+    return /^[A-Za-z]:$/.test(up) ? up + "\\" : up;
+  }
+
+  // Each column header names its folder. Click it to type another; the arrow
+  // steps up one folder. The choice is saved, so it comes back next launch.
+  function paintColumn(i) {
+    var pane = treeEl.children[i];
+    var head = pane.querySelector(".pane-head");
+    var body = pane.querySelector(".pane-body");
+    var path = columns[i];
+    head.innerHTML = "";
+    var title = document.createElement("button");
+    title.type = "button";
+    title.className = "title";
+    var name = leaf(path);
+    title.textContent = name.toLowerCase() === LABELS[i] ? name : LABELS[i] + " \u00b7 " + name;
+    title.title = path + "\n(click to change)";
+    title.addEventListener("click", function () { editColumn(i); });
+    var up = document.createElement("button");
+    up.type = "button";
+    up.className = "up";
+    up.textContent = "\u2191";
+    up.title = "up one folder";
+    up.disabled = !parentOf(path);
+    up.addEventListener("click", function () {
+      var parent = parentOf(path);
+      if (parent) setColumn(i, parent);
+    });
+    head.appendChild(title);
+    head.appendChild(up);
+    fill(body, path, 1, true);
+  }
+
+  function editColumn(i) {
+    var head = treeEl.children[i].querySelector(".pane-head");
+    head.innerHTML = "";
+    var input = document.createElement("input");
+    input.type = "text";
+    input.value = columns[i];
+    input.setAttribute("aria-label", LABELS[i] + " folder");
+    var bad = document.createElement("span");
+    bad.className = "bad";
+    head.appendChild(input);
+    head.appendChild(bad);
+    input.focus();
+    input.select();
+    var done = false;
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        setColumn(i, input.value, function () { bad.textContent = "missing"; input.focus(); });
+      } else if (e.key === "Escape") {
+        done = true;
+        paintColumn(i);
+      }
+    });
+    input.addEventListener("blur", function () {
+      setTimeout(function () {
+        if (!done && document.activeElement !== input && head.contains(input)) paintColumn(i);
+      }, 150);
     });
   }
 
-  function select(i) {
-    active = i;
+  function showSplit() {
+    treeEl.className = "split-view";
+    treeEl.innerHTML = "";
+    columns.forEach(function (path, i) {
+      var pane = document.createElement("section");
+      pane.className = "pane";
+      var head = document.createElement("div");
+      head.className = "pane-head";
+      var body = document.createElement("div");
+      body.className = "pane-body";
+      pane.appendChild(head);
+      pane.appendChild(body);
+      treeEl.appendChild(pane);
+      paintColumn(i);
+    });
+  }
+
+  // One selection drives the right side: the companion card shows it, the
+  // matching spine tab lights, and the matching main-card row is marked.
+  function selectPath(path) {
+    selected = path || null;
+    active = -1;
+    roots.forEach(function (r, i) { if (same(r, selected)) active = i; });
     paintTabs();
-    if (i < 0) {
+    treeEl.querySelectorAll(".row").forEach(function (row) {
+      var node = row.tipNode;
+      row.classList.toggle("sel", !!node && canSelect(node) && same(node.path, selected));
+    });
+    if (!selected) {
       card.classList.remove("open");
       cardBody.innerHTML = "";
       return;
     }
+    cardName.textContent = leaf(selected);
+    cardPath.textContent = selected;
+    cardPath.title = selected;
     card.classList.add("open");
-    fill(cardBody, roots[i]);
+    fill(cardBody, selected, 3, false);
+  }
+
+  function select(i) {
+    selectPath(i < 0 ? null : roots[i]);
   }
 
   function cycle(step) {
@@ -421,7 +629,6 @@
   }
 
   document.getElementById("add").addEventListener("click", function () {
-    if (spine.classList.contains("collapsed")) spine.classList.remove("collapsed");
     field.classList.toggle("open");
     note.textContent = "";
     if (field.classList.contains("open")) dir.focus();
@@ -444,6 +651,20 @@
       });
   });
 
+  function setFold(shut, remember) {
+    spine.classList.toggle("collapsed", shut);
+    spine.style.width = shut ? "44px" : wide + "px";
+    fold.innerHTML = shut ? "&rsaquo;" : "&lsaquo;";
+    fold.title = shut ? "open spine" : "collapse spine";
+    fold.setAttribute("aria-label", fold.title);
+    if (!remember) return;
+    try { localStorage.setItem("stratabasor.spine", shut ? "shut" : "open"); } catch (e) {}
+  }
+  fold.addEventListener("click", function () {
+    setFold(!spine.classList.contains("collapsed"), true);
+  });
+  document.getElementById("card-x").addEventListener("click", function () { selectPath(null); });
+
   var drag = null;
   split.addEventListener("pointerdown", function (e) {
     drag = { x: e.clientX, moved: false };
@@ -458,10 +679,7 @@
     spine.style.width = wide + "px";
   });
   split.addEventListener("pointerup", function () {
-    if (drag && !drag.moved) {
-      var shut = spine.classList.toggle("collapsed");
-      spine.style.width = shut ? "44px" : wide + "px";
-    }
+    if (drag && !drag.moved) setFold(!spine.classList.contains("collapsed"), true);
     drag = null;
   });
 
@@ -489,9 +707,15 @@
       var name = String(path).replace(/[\\/]+$/, "").split(/[\\/]/).pop();
       if (name && name.toLowerCase() === "artifact-scanner") pick = i;
     });
-    if (pick >= 0) select(pick);
+    if (pick >= 0 && !selected) select(pick);
   });
-  showSplit();
+  fetch("/api/columns").then(function (r) { return r.json(); }).then(function (j) {
+    columns = j.columns || [];
+    showSplit();
+  });
+  var foldPref = null;
+  try { foldPref = localStorage.getItem("stratabasor.spine"); } catch (e) {}
+  if (foldPref === "shut" || (foldPref === null && window.innerWidth < 700)) setFold(true);
 })();
 </script>
 </body>

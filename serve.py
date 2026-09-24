@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent
 PAGE = ROOT / "bowser.html"
 BINDS = ROOT / "keybinds.csv"
 SAVED = ROOT / "roots.json"
+COLUMNS = ROOT / "columns.json"
 PORT = 8741
 DEFAULT_ROOTS = (r"C:\dev", r"C:\Users\bardw\durable")
 IGNORED_DIRS = {
@@ -68,6 +69,28 @@ def load_roots() -> list[str]:
 
 def save_roots(roots: list[str]) -> None:
     SAVED.write_text(json.dumps(roots, indent=2) + "\n", encoding="utf-8")
+
+
+def load_columns() -> list[str]:
+    """The two main-card columns. Dev and durable until one is changed."""
+    cols = list(DEFAULT_ROOTS)
+    try:
+        data = json.loads(COLUMNS.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return cols
+    if isinstance(data, list):
+        for i, x in enumerate(data[: len(cols)]):
+            if isinstance(x, str) and x:
+                cols[i] = x
+    return cols
+
+
+def save_columns(cols: list[str]) -> None:
+    COLUMNS.write_text(json.dumps(cols, indent=2) + "\n", encoding="utf-8")
+
+
+def allowed_roots() -> list[str]:
+    return list(DEFAULT_ROOTS) + load_roots() + load_columns()
 
 
 def git_branches(repo: str) -> dict:
@@ -143,6 +166,7 @@ def build_tree(current: str, base: str, depth: int = 0, max_depth: int = 6) -> d
         if branches["children"]:
             node["children"].append(branches)
     if depth >= max_depth:
+        node["more"] = True
         return node
     try:
         entries = sorted(os.scandir(current), key=lambda e: (not e.is_dir(), e.name.lower()))
@@ -170,27 +194,13 @@ def build_tree(current: str, base: str, depth: int = 0, max_depth: int = 6) -> d
     return node
 
 
-def known_root(path: str) -> str | None:
-    try:
-        resolved = str(Path(path).resolve())
-    except OSError:
-        return None
-    for saved in list(DEFAULT_ROOTS) + load_roots():
-        try:
-            if str(Path(saved).resolve()) == resolved:
-                return resolved
-        except OSError:
-            continue
-    return None
-
-
 def under_known_root(path: str) -> str | None:
     """The path itself, resolved, when it sits inside a root the page may read."""
     try:
         resolved = Path(path).resolve()
     except OSError:
         return None
-    for saved in list(DEFAULT_ROOTS) + load_roots():
+    for saved in allowed_roots():
         try:
             base = Path(saved).resolve()
         except OSError:
@@ -270,9 +280,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/roots":
             self._json(200, {"roots": load_roots()})
             return
+        if parsed.path == "/api/columns":
+            self._json(200, {"columns": load_columns()})
+            return
         if parsed.path == "/api/tree":
             qs = parse_qs(parsed.query)
-            root = known_root((qs.get("root") or [""])[0])
+            root = under_known_root((qs.get("root") or [""])[0])
             if not root or not os.path.isdir(root):
                 self._json(404, {"error": "missing"})
                 return
@@ -292,7 +305,25 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "missing"})
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/roots":
+        route = urlparse(self.path).path
+        if route == "/api/columns":
+            body = self._read()
+            raw = str(body.get("path") or "").strip().strip('"')
+            index = body.get("index")
+            cols = load_columns()
+            if not isinstance(index, int) or not 0 <= index < len(cols):
+                self._json(400, {"error": "missing"})
+                return
+            if not raw or not os.path.isdir(raw):
+                self._json(400, {"error": "missing"})
+                return
+            with _lock:
+                cols = load_columns()
+                cols[index] = str(Path(raw).resolve())
+                save_columns(cols)
+            self._json(200, {"columns": cols})
+            return
+        if route != "/api/roots":
             self._json(404, {"error": "missing"})
             return
         raw = str(self._read().get("path") or "").strip().strip('"')
