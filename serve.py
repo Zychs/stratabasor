@@ -71,7 +71,7 @@ def save_roots(roots: list[str]) -> None:
 
 
 def git_branches(repo: str) -> dict:
-    info = {"local": [], "remote": [], "current": None}
+    info = {"local": [], "remote": [], "current": None, "worktree": []}
     try:
         result = subprocess.run(
             ["git", "-C", repo, "branch", "-a"],
@@ -86,14 +86,19 @@ def git_branches(repo: str) -> dict:
         stripped = line.strip()
         if not stripped or "-> " in stripped:
             continue
+        # git marks the checked-out branch with "*" and a branch checked out in
+        # another worktree with "+". Neither mark is part of the name.
         current = line.startswith("*")
-        name = stripped.lstrip("*").strip()
+        elsewhere = line.startswith("+")
+        name = stripped.lstrip("*+").strip()
         if name.startswith("remotes/"):
             info["remote"].append(name[len("remotes/"):])
         else:
             info["local"].append(name)
             if current:
                 info["current"] = name
+            if elsewhere:
+                info["worktree"].append(name)
     return info
 
 
@@ -110,6 +115,10 @@ def build_tree(current: str, base: str, depth: int = 0, max_depth: int = 6) -> d
         "type": "directory",
         "children": [],
     }
+    try:
+        node["mtime"] = os.stat(current).st_mtime
+    except OSError:
+        pass
     if os.path.exists(os.path.join(current, ".git")):
         node["type"] = "repository"
         info = git_branches(current)
@@ -120,12 +129,15 @@ def build_tree(current: str, base: str, depth: int = 0, max_depth: int = 6) -> d
                 "name": lb,
                 "type": "branch_local",
                 "is_current": lb == info["current"],
+                "in_worktree": lb in info["worktree"],
+                "repo": current,
                 "key": f"{name}::local::{lb}",
             })
         for rb in info["remote"]:
             branches["children"].append({
                 "name": rb,
                 "type": "branch_remote",
+                "repo": current,
                 "key": f"{name}::remote::{rb}",
             })
         if branches["children"]:
@@ -142,18 +154,26 @@ def build_tree(current: str, base: str, depth: int = 0, max_depth: int = 6) -> d
                 continue
             node["children"].append(build_tree(entry.path, base, depth + 1, max_depth))
         elif entry.name not in IGNORED_FILES:
-            node["children"].append({
+            leaf = {
                 "name": entry.name,
                 "path": entry.path,
                 "rel_path": os.path.relpath(entry.path, base).replace("\\", "/"),
                 "type": "file",
-            })
+            }
+            try:
+                st = entry.stat()
+                leaf["size"] = st.st_size
+                leaf["mtime"] = st.st_mtime
+            except OSError:
+                pass
+            node["children"].append(leaf)
     return node
 
 
-def known_root(path: str) -> str | None:
+def under_known_root(path: str) -> str | None:
+    """The path itself, resolved, when it sits inside a root the page may read."""
     try:
-        resolved = str(Path(path).resolve())
+        resolved = Path(path).resolve()
     except OSError:
         return None
     for saved in list(DEFAULT_ROOTS) + load_roots():
@@ -161,9 +181,42 @@ def known_root(path: str) -> str | None:
             base = Path(saved).resolve()
         except OSError:
             continue
-        if Path(resolved) == base or base in Path(resolved).parents:
-            return resolved
+        if resolved == base or base in resolved.parents:
+            return str(resolved)
     return None
+
+
+def last_commit(repo: str, ref: str = "HEAD") -> dict | None:
+    """Newest commit on a ref. Read-only git log. Nothing is written."""
+    if ref.startswith("-"):
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo, "log", "-1", "--format=%h%x1f%an%x1f%cI%x1f%s", ref, "--"],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore",
+            check=False, **NO_WINDOW,
+        )
+    except OSError:
+        return None
+    parts = result.stdout.strip().split("")
+    if result.returncode != 0 or len(parts) != 4:
+        return None
+    return {"hash": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]}
+
+
+def detail(path: str, branch: str | None) -> dict:
+    """The far end of a hover tip. Only asked for when the pointer reaches it."""
+    out: dict = {}
+    if os.path.isdir(os.path.join(path, ".git")) or branch:
+        commit = last_commit(path, branch or "HEAD")
+        if commit:
+            out["commit"] = commit
+    if not branch and os.path.isdir(path):
+        try:
+            out["entries"] = sum(1 for _ in os.scandir(path))
+        except OSError:
+            pass
+    return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -205,13 +258,22 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/tree":
             qs = parse_qs(parsed.query)
-            root = known_root((qs.get("root") or [""])[0])
+            root = under_known_root((qs.get("root") or [""])[0])
             if not root or not os.path.isdir(root):
                 self._json(404, {"error": "missing"})
                 return
             raw_depth = (qs.get("depth") or [""])[0]
             max_depth = int(raw_depth) if raw_depth.isdigit() else 6
             self._json(200, build_tree(root, root, max_depth=min(6, max_depth)))
+            return
+        if parsed.path == "/api/detail":
+            qs = parse_qs(parsed.query)
+            path = under_known_root((qs.get("path") or [""])[0])
+            if not path or not os.path.exists(path):
+                self._json(404, {"error": "missing"})
+                return
+            branch = (qs.get("branch") or [""])[0] or None
+            self._json(200, detail(path, branch))
             return
         self._json(404, {"error": "missing"})
 

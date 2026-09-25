@@ -4,7 +4,11 @@ Local browser for one job: show a repo the way AyTree's tree tool does. Folders,
 
 The left spine starts empty. The plus has no border and a wide hit area. It opens a field in the window. It does not fullscreen.
 
-The main pane opens as a split: dev on one side, durable on the other. Folders, and branches on any repo in that first level. A chosen directory opens as a card over that split, offset down from the top.
+The main pane opens as a split: dev on one side, durable on the other. Folders, and branches on any repo in that first level. That split is the main card. A chosen directory opens as its companion card, beside it and offset down from the top.
+
+## Hover
+
+Hold the pointer on a row and the hover card fills in, above the companion card. It keeps the last row until another is hovered. Escape or the x closes it. How far across the row the pointer sits sets how much it says. Four steps, left to right: name and kind; where it sits, its branch, what it holds; full path, size, last change; last commit and what is on disk. The last step asks git only when the pointer gets there.
 
 ## Run
 
