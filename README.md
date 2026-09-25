@@ -14,6 +14,8 @@ python C:\dev\stratabasor\serve.py
 
 Opens fullscreen in Edge when Edge is on the machine. Otherwise the same local-browser open AyTree uses. Page is `http://127.0.0.1:8741/`.
 
+The AyTree workbench pin starts this. No terminal.
+
 ## Keys
 
 `keybinds.csv` is the only key list. Each column is a key. Each row is a bind. The column `unbound` is parked. It is not a keyboard key.
