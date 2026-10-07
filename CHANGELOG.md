@@ -14,6 +14,9 @@ Reverse-chronological. Dates are local. No version scheme. Stay on Unreleased.
 ### PARKED
 
 - The second Vision corpse. One corpse is named. Do not guess the other.
+- 2026-10-07: Semantic operating system. Where stratabasor is headed. The rest of the shape is not given yet. Do not fill it in.
+- 2026-10-07: 2048 for views. One keybind shuffles views, merging and sliding, until what is needed is what is left. Bind is `views.shuffle`, parked on `unbound`. Merge rule not given.
+- 2026-10-07: LOD. Artifact-scanner and AyTree each carry some. Neither is sufficient. Both are hardcoded, as unhardcoded as they can be without a new OS. The hover card's four steps here are LOD too, and hardcoded the same way.
 
 ### Changed
 
