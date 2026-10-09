@@ -106,29 +106,37 @@ def chapters(source: str) -> dict[str, dict] | None:
         while start - 1 > floor and lines[start - 2].startswith("#"):
             start -= 1
         text = "\n".join(lines[start - 1:node.end_lineno])
+        doc = None
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             key, kind, name = "imports", "imports", "imports"
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            key, kind, name = f"def {node.name}", "def", node.name
+            key, kind, name, doc = f"def {node.name}", "def", node.name, ast.get_docstring(node)
         elif isinstance(node, ast.ClassDef):
-            key, kind, name = f"class {node.name}", "class", node.name
+            key, kind, name, doc = f"class {node.name}", "class", node.name, ast.get_docstring(node)
         else:
-            key, kind, name = "module", "module", "module code"
+            key, kind, name, doc = "module", "module", "module code", ast.get_docstring(tree)
         part = out.get(key)
         if part and kind in ("imports", "module"):
             part["text"] += ("\n" if start == part["end"] + 1 else "\n\n") + text
             part["shape"] += "\n" + ast.dump(node)
             part["end"] = node.end_lineno
         else:
-            out[key] = {"kind": kind, "name": name, "text": text, "shape": ast.dump(node), "end": node.end_lineno}
+            out[key] = {"kind": kind, "name": name, "text": text, "shape": ast.dump(node),
+                        "end": node.end_lineno, "line": start, "doc": first_line(doc)}
         floor = node.end_lineno
     return out
+
+
+def first_line(doc: str | None) -> str | None:
+    """A docstring's first line: the chapter's epigraph on the bottle page's book card."""
+    line = doc.strip().split("\n")[0].strip() if doc else ""
+    return line[:160] or None
 
 
 def whole(source: str) -> dict[str, dict]:
     """A version that won't parse is one chapter: the whole file."""
     text = source.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
-    return {"unparsed": {"kind": "unparsed", "name": "whole file", "text": text,
+    return {"unparsed": {"kind": "unparsed", "name": "whole file", "text": text, "line": 1, "doc": None,
                          "shape": hashlib.sha256(source.encode("utf-8")).hexdigest()}}
 
 
@@ -213,8 +221,8 @@ def _item(folder: str, mtime: int, size: int, path: str) -> dict | None:
 
 
 def face(key: str, part: dict, status: str | None) -> dict:
-    return {"key": key, "kind": part["kind"], "name": part["name"],
-            "lines": part["text"].count("\n") + 1, "status": status}
+    return {"key": key, "kind": part["kind"], "name": part["name"], "line": part["line"],
+            "lines": part["text"].count("\n") + 1, "doc": part["doc"], "status": status}
 
 
 def _json(code: int, body: object) -> tuple[int, str, bytes]:

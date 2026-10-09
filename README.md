@@ -18,6 +18,8 @@ Five levels, each a smaller copy of the one above. Items are the tracked files. 
 
 Click opens one node and folds the others beside it. Move the pointer out and it folds. Escape folds the deepest.
 
+Beside it sits the book card, in house negentropic-blue. The attended version is a contents page; the attended chapter is a chapter: numeral, title, its docstring as epigraph, its text with line numbers, a folio to turn pages. Attention is window focus times mouse coherence. A hand at rest, or moving straight to something, is coherent; a wandering one is not. Once attention has rested on a version, chapter, or era, the card turns to it; a click turns it at once. The card's order follows attention: the cyan frame lights, the text comes into focus, the ribbon lengthens. Hover the ribbon for the reading.
+
 The module is `bottle/`: `shelf.py` reads, `bottle.html` shows, `test_shelf.py` checks. `serve.py` loads `shelf.py` by path on first use.
 
 ```powershell

@@ -96,6 +96,12 @@ class ChaptersTest(unittest.TestCase):
         cut = shelf.chapters("x = 1\n\n# keeps rows\n@dec\ndef f():\n    pass\n")
         self.assertEqual(cut["def f"]["text"], "# keeps rows\n@dec\ndef f():\n    pass")
 
+    def test_chapters_carry_their_first_line_and_docstring(self):
+        cut = shelf.chapters('"""Module.\n\nMore."""\nimport os\n\n\n# note\ndef f():\n    """Does f.\n\n    Long."""\n')
+        self.assertEqual((cut["module"]["line"], cut["module"]["doc"]), (1, "Module."))
+        self.assertEqual((cut["imports"]["line"], cut["imports"]["doc"]), (4, None))
+        self.assertEqual((cut["def f"]["line"], cut["def f"]["doc"]), (7, "Does f."), "line counts the comment above")
+
     def test_unparsable_is_none(self):
         self.assertIsNone(shelf.chapters("def (:\n"))
 

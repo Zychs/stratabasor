@@ -64,7 +64,15 @@
   .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; }
   .legend i { font-style: normal; color: var(--c); }
   @media (max-width: 600px) { .legend { display: none; } }
-  #board { max-width: 1200px; margin: 0 auto; padding: 14px 20px 50vh; }
+  #page {
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); gap: 20px; align-items: start;
+    max-width: 1680px; margin: 0 auto; padding: 14px 20px 50vh;
+  }
+  #board { min-width: 0; }
+  @media (max-width: 980px) {
+    #page { grid-template-columns: minmax(0, 1fr); }
+    #book { display: none; }
+  }
   .none { color: var(--soft); }
 
   /* A node per level. Each level is the one above at .92 scale: the fractal. */
@@ -133,6 +141,80 @@
   pre .add::before { content: "+"; color: var(--add); }
   pre .del { color: var(--del); text-decoration: line-through; background: color-mix(in srgb, var(--del) 9%, transparent); }
   pre .del::before { content: "−"; }
+
+  /* The book card. House negentropic-blue (journal-clip clip_look.py: ink, cyan frame, void),
+     set like a book's chapter. --a is attention, 0 to 1: the frame lights, the text comes into
+     focus and the ribbon lengthens as it rises. */
+  #book {
+    --nb-bg: #050509; --nb-void: #0a0a10; --nb-line: #272739;
+    --nb-ink: #e7e7f2; --nb-strong: #f4f4fb; --nb-soft: #a7a7bd; --nb-mute: #6c6c83;
+    --nb-cyan: #7cf7ff; --nb-cyan-soft: #9fe9f1; --nb-cyan-deep: #28a2b2; --nb-amber: #e2a24a; --nb-good: #4cae7c;
+    --nb-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --a: 0;
+    position: sticky; top: calc(var(--bar-h, 64px) + 12px);
+    color: var(--nb-ink); background: var(--nb-void);
+    border: 1px solid color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 100%), var(--nb-line));
+    box-shadow:
+      0 0 calc(var(--a) * 26px) color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 20%), transparent),
+      0 18px 40px rgb(0 0 0 / 0.5);
+  }
+  #book .leaf {
+    max-height: calc(100vh - var(--bar-h, 64px) - 28px); overflow: auto; overscroll-behavior: contain;
+    padding: 18px 28px 22px;
+  }
+  #book .ribbon {
+    position: absolute; top: -1px; right: 22px; z-index: 1; width: 10px; height: calc(12px + var(--a) * 64px);
+    background: linear-gradient(var(--nb-cyan-deep), var(--nb-cyan));
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+  }
+  #book .mast {
+    display: flex; justify-content: space-between; gap: 12px;
+    margin: 0 18px 20px 0; padding-bottom: 8px; border-bottom: 1px solid var(--nb-line);
+    font: 11px/1.3 var(--nb-mono); letter-spacing: 0.08em; color: var(--nb-cyan);
+  }
+  #book .mast span { overflow-wrap: anywhere; }
+  #book .mast span + span { color: var(--nb-mute); white-space: nowrap; }
+  #book .numeral {
+    text-align: center; font: 600 13px/1 var(--serif); letter-spacing: 0.32em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 100%), var(--nb-mute));
+  }
+  #book h2 {
+    margin: 0.45em 0 0.2em; text-align: center; overflow-wrap: anywhere;
+    font: 400 30px/1.15 var(--serif); color: var(--nb-strong);
+  }
+  #book .epigraph { margin: 0.7em 0 0 18%; text-align: right; font: italic 15px/1.45 var(--serif); color: var(--nb-soft); }
+  #book .epigraph cite { display: block; margin-top: 0.2em; font: normal 11px/1.4 var(--nb-mono); color: var(--nb-mute); }
+  #book .fleuron { margin: 16px 0 14px; text-align: center; font-size: 18px; letter-spacing: 0.6em; color: var(--nb-cyan-deep); }
+  #book .text {
+    margin: 0; padding: 10px 0; overflow-x: auto;
+    font: 13px/1.55 var(--nb-mono); color: var(--nb-strong);
+    background: var(--nb-bg); border: 1px solid var(--nb-line);
+  }
+  #book .text span { position: relative; display: block; width: max-content; min-width: 100%; padding: 0 14px 0 3.8em; white-space: pre; }
+  #book .text span::before { content: attr(data-n); position: absolute; left: 0; width: 3em; text-align: right; color: var(--nb-mute); }
+  /* negentropy: what is read comes into order as attention gathers */
+  #book .text, #book .toc { opacity: calc(0.55 + 0.45 * var(--a)); filter: blur(calc((1 - var(--a)) * 0.8px)); }
+  #book .toc { margin: 0; padding: 0; list-style: none; }
+  #book button { appearance: none; padding: 2px 4px; font: inherit; color: var(--nb-cyan-soft); background: none; border: 0; cursor: pointer; }
+  #book button:hover { color: var(--nb-cyan); }
+  #book button:focus-visible { outline: 1px solid var(--nb-cyan); }
+  #book .toc button { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 3px 0; text-align: left; font: 15px/1.4 var(--serif); color: var(--nb-ink); }
+  #book .toc .n { flex: none; width: 3.4em; text-align: right; font: 11px var(--nb-mono); letter-spacing: 0.1em; color: var(--nb-mute); }
+  #book .toc .lead { flex: 1; min-width: 1em; border-bottom: 1px dotted var(--nb-line); transform: translateY(-0.3em); }
+  #book .toc .pg { font: 12px var(--nb-mono); color: var(--nb-soft); }
+  #book .toc .new .n { color: var(--nb-good); }
+  #book .toc .changed .n { color: var(--nb-amber); }
+  #book .toc .removed .nm { text-decoration: line-through; color: var(--nb-mute); }
+  #book .folio {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; margin-top: 16px;
+    font: 12px var(--nb-mono); color: var(--nb-mute);
+  }
+  #book .folio b { font: 400 14px var(--serif); letter-spacing: 0.2em; color: var(--nb-soft); }
+  #book .folio button:last-child { justify-self: end; }
+  #book .folio button:first-child { justify-self: start; }
+  #book .where { margin-top: 4px; text-align: center; font: 11px var(--nb-mono); color: var(--nb-mute); }
+  @media (prefers-reduced-motion: reduce) { #book .text, #book .toc { filter: none; } }
 </style>
 </head>
 <body>
@@ -155,7 +237,10 @@
     <i class="L-precious">&#9670; precious</i>
   </span>
 </header>
-<main id="board"></main>
+<main id="page">
+  <div id="board"></div>
+  <aside id="book" aria-label="book card"><i class="ribbon" aria-hidden="true"></i><div class="leaf"></div></aside>
+</main>
 <script>
 "use strict";
 const GRACE = 280; // ms an open node waits after the pointer leaves before it folds
@@ -229,6 +314,7 @@ async function read(root) {
     bottle = { root, items: j.items };
     filterEl.hidden = sortEl.hidden = false;
     render();
+    show(null);
   } catch (e) {
     statusEl.textContent = e.message;
   }
@@ -280,31 +366,36 @@ function versionNode(d, v) {
     : x.unparsed ? [tag("after a syntax error", "t-fmt")]
     : !x.add && !x.chg && !x.del ? [tag("≈ comments / format", "t-fmt")]
     : [x.add && tag("+" + x.add, "t-new"), x.chg && tag("~" + x.chg, "t-chg"), x.del && tag("−" + x.del, "t-del")];
-  return node("versions", [
+  const n = node("versions", [
     h("span", "name", "v" + v.n), h("span", "when", when(v.at)), ...tags,
     h("span", "meta", `${plural(v.lines, "line")} · ${v.sha.slice(0, 8)}`),
   ], () => (v.chapters.length ? v.chapters.map((c) => chapterNode(d, v, c)) : [h("p", "none", "empty file")]));
+  n._subject = { d, v };
+  return n;
 }
 
 function chapterNode(d, v, c) {
-  const label = c.kind === "def" || c.kind === "class" ? c.kind + " " + c.name : c.name;
   const status = { new: tag("new", "t-new"), changed: tag("changed", "t-chg"), removed: tag("removed", "t-del") }[c.status];
-  return node("chapters", [h("span", "name", label), status, h("span", "meta", plural(c.lines, "line"))],
-    () => d.eras[c.key].slice().reverse().map((e, i, all) => eraNode(d, v, c.key, e, i + 1 < all.length)),
+  const n = node("chapters", [h("span", "name", label(c)), status, h("span", "meta", plural(c.lines, "line"))],
+    () => d.eras[c.key].slice().reverse().map((e, i, all) => eraNode(d, v, c, e, i + 1 < all.length)),
     c.status === "removed" ? "gone" : null);
+  n._subject = { d, v, c };
+  return n;
 }
 
-function eraNode(d, v, key, e, hasBefore) {
-  const next = d.versions[e.to]; // the first version after the era
-  const ends = next && !next.chapters.some((c) => c.key === key && c.status !== "removed");
+function eraNode(d, v, c, e, hasBefore) {
+  const key = c.key, next = d.versions[e.to]; // the first version after the era
+  const ends = next && !next.chapters.some((x) => x.key === key && x.status !== "removed");
   const fate = !ends ? null : key === "unparsed" ? "then fixed" : next.parsed ? "then removed" : "then unparsed";
-  return node("eras", [
+  const n = node("eras", [
     h("span", "name", e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`),
     h("span", "when", `${when(d.versions[e.from - 1].at)} → ${next ? when(next.at) : "now"}`),
     v.n >= e.from && v.n <= e.to && tag("◉ v" + v.n, "t-here"),
     fate && tag(fate, "t-del"),
     h("span", "meta", plural(e.to - e.from + 1, "version")),
   ], () => [precious(e, hasBefore)]);
+  n._subject = { d, v, c, e };
+  return n;
 }
 
 function precious(e, hasBefore) {
@@ -319,6 +410,134 @@ function precious(e, hasBefore) {
       h("span", "when", plural(text.split("\n").length, "line")),
       hasBefore && tag("+" + count("+"), "t-new"), hasBefore && tag("−" + count("-"), "t-del"), copy),
     h("pre", null, ...e.rows.map(([op, line]) => h("span", op === "+" ? "add" : op === "-" ? "del" : null, line || " "))));
+}
+
+/* ---- the book card: the attended version or chapter, set as a book's pages ---- */
+
+const bookEl = $("#book"), leaf = bookEl.querySelector(".leaf"), ribbon = bookEl.querySelector(".ribbon");
+const label = (c) => (c.kind === "def" || c.kind === "class" ? c.kind + " " + c.name : c.name);
+const span = (e) => (e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`);
+// The era a chapter page reads: the one holding version n, else the last before it (a removed chapter).
+const eraAt = (d, c, n) => d.eras[c.key].find((e) => e.from <= n && n <= e.to) || d.eras[c.key].filter((e) => e.to < n).pop();
+
+function roman(n) {
+  let out = "";
+  for (const [v, s] of [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
+    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]) while (n >= v) { out += s; n -= v; }
+  return out;
+}
+
+function act(el, fn) {
+  el.type = "button";
+  el.onclick = fn;
+  return el;
+}
+
+function show(sub) {
+  const id = sub ? [sub.d.path, sub.v.n, sub.c?.key, sub.e?.from].join("|") : "front|" + (bottle?.root || "");
+  if (bookEl.dataset.id === id) return;
+  bookEl.dataset.id = id;
+  leaf.replaceChildren(...(!sub ? frontispiece() : sub.c ? chapterPage(sub) : contentsPage(sub)));
+  leaf.scrollTop = 0;
+}
+
+function mast(d, v) {
+  return h("div", "mast", h("span", null, d.path), h("span", null, `v${v.n} · ${when(v.at)}`));
+}
+
+function frontispiece() {
+  const name = bottle ? bottle.root.split(/[\\/]/).filter(Boolean).pop() : "bottle";
+  return [h("div", "mast", h("span", null, "bottle"), h("span", null, bottle ? plural(bottle.items.length, "item") : "")),
+    h("div", "numeral", "◆"), h("h2", null, name),
+    h("p", "epigraph", "The page follows your attention.", h("cite", null, "rest on a version, chapter or era"))];
+}
+
+function contentsPage({ d, v }) {
+  const at = d.versions.indexOf(v), x = v.delta;
+  const said = !v.parsed ? "does not parse" : !x ? "first edition" : x.unparsed ? "after a syntax error"
+    : `${x.add} new · ${x.chg} changed · ${x.del} removed`;
+  const turn = (i) => d.versions[i] && act(h("button", null, i < at ? `‹ v${i + 1}` : `v${i + 1} ›`), () => show({ d, v: d.versions[i] }));
+  return [mast(d, v), h("div", "numeral", "contents"), h("h2", null, d.path.split("/").pop()),
+    h("p", "epigraph", said, h("cite", null, plural(v.lines, "line"))),
+    h("div", "fleuron", "❦"),
+    h("ol", "toc", ...v.chapters.map((c, i) => h("li", c.status, act(h("button", null,
+      h("span", "n", roman(i + 1)), h("span", "nm", label(c)), h("span", "lead"),
+      h("span", "pg", c.status === "removed" ? "—" : String(c.line))), () => show({ d, v, c }))))),
+    h("div", "folio", turn(at - 1) || h("span"), h("b", null, `— v${v.n} —`), turn(at + 1) || h("span"))];
+}
+
+function chapterPage({ d, v, c, e }) {
+  const era = e || eraAt(d, c, v.n);
+  const text = era.rows.filter((r) => r[0] !== "-").map((r) => r[1]);
+  const here = era.from <= v.n && v.n <= era.to && c.status !== "removed";
+  const after = d.versions[era.to];
+  const held = `held ${span(era)} · ${when(d.versions[era.from - 1].at)} → ${after ? when(after.at) : "now"}`;
+  const list = v.chapters, i = list.indexOf(c);
+  const turn = (j) => list[j] && act(h("button", null, j < i ? `‹ ${roman(j + 1)}` : `${roman(j + 1)} ›`), () => show({ d, v, c: list[j] }));
+  return [mast(d, v), h("div", "numeral", "chapter " + roman(i + 1)), h("h2", null, label(c)),
+    h("p", "epigraph", c.doc, h("cite", null, c.status === "removed" ? `removed in v${v.n} · last ${held}` : held)),
+    h("div", "fleuron", "❦"),
+    h("pre", "text", ...text.map((line, k) => {
+      const row = h("span", null, line || " ");
+      if (here) row.dataset.n = c.line + k;
+      return row;
+    })),
+    h("div", "folio", turn(i - 1) || h("span"), h("b", null, `— ${roman(i + 1)} —`), turn(i + 1) || h("span")),
+    h("div", "where", here ? `lines ${c.line}–${c.line + text.length - 1} of v${v.n}` : `as of ${span(era)}`)];
+}
+
+/* ---- attention = window focus × mouse coherence ---- */
+
+// focus      1 while this window has focus and is showing, else 0.
+// coherence  from the last second of pointer travel. A hand at rest (low variance) or one moving
+//            straight to something (net distance near its path length) is coherent; one that wanders is not.
+// The product gathers in about a third of a second and fades over a second and a half. It sets the
+// card's order (frame, focus of the text, ribbon) and turns its page: attention has to rest on a
+// version, chapter or era for SETTLE attention-seconds before the card follows. A click turns it at once.
+const SETTLE = 0.3;
+const att = { a: 0, focus: 0, coherence: 1, trail: [], raf: 0, t: 0, cand: null, held: 0, told: 0 };
+
+function coherence(trail) {
+  if (trail.length < 3) return 1;
+  let path = 0, mx = 0, my = 0;
+  trail.forEach((p, i) => {
+    mx += p.x;
+    my += p.y;
+    if (i) path += Math.hypot(p.x - trail[i - 1].x, p.y - trail[i - 1].y);
+  });
+  if (path < 12) return 1; // a resting hand
+  mx /= trail.length;
+  my /= trail.length;
+  const spread = Math.sqrt(trail.reduce((s, p) => s + (p.x - mx) ** 2 + (p.y - my) ** 2, 0) / trail.length);
+  const straight = Math.hypot(trail.at(-1).x - trail[0].x, trail.at(-1).y - trail[0].y) / path;
+  return Math.max(Math.exp(-spread / 90), 0.85 * straight);
+}
+
+function wake() {
+  att.raf ||= requestAnimationFrame(tick);
+}
+
+function tick(now) {
+  att.raf = 0;
+  const dt = att.t ? Math.min(0.1, (now - att.t) / 1000) : 0;
+  att.t = now;
+  att.trail = att.trail.filter((p) => now - p.t <= 1000);
+  att.focus = document.hasFocus() && !document.hidden ? 1 : 0;
+  att.coherence = coherence(att.trail);
+  const target = att.focus * att.coherence;
+  att.a += (target - att.a) * (1 - Math.exp(-dt / (target > att.a ? 0.35 : 1.5)));
+  bookEl.style.setProperty("--a", att.a.toFixed(3));
+  if (now - att.told > 250) {
+    att.told = now;
+    ribbon.title = `attention ${att.a.toFixed(2)} = focus ${att.focus} × coherence ${att.coherence.toFixed(2)}`;
+  }
+  const settling = Boolean(att.cand?.isConnected) && att.held < SETTLE;
+  if (settling) {
+    att.held += dt * att.a;
+    if (att.held >= SETTLE) show(att.cand._subject);
+  }
+  if (settling || att.trail.length || Math.abs(target - att.a) > 0.003) wake();
+  else att.t = 0;
 }
 
 /* ---- click opens one, leaving folds ---- */
@@ -371,11 +590,23 @@ board.addEventListener("click", (e) => {
   if (!head) return;
   const n = head.parentElement;
   keep(head, () => (n.classList.contains("open") ? fold(n) : unfold(n)));
+  if (n._subject && n.classList.contains("open")) show(n._subject);
 });
-addEventListener("mousemove", (e) => { px = e.clientX; py = e.clientY; }, { passive: true });
+addEventListener("pointermove", (e) => {
+  px = e.clientX;
+  py = e.clientY;
+  if (e.pointerType === "touch") return;
+  att.trail.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+  const n = e.target.closest?.(".node.L-versions, .node.L-chapters, .node.L-eras") || null;
+  if (n !== att.cand) { att.cand = n; att.held = 0; }
+  wake();
+}, { passive: true });
+document.documentElement.addEventListener("mouseleave", () => { att.cand = null; });
+addEventListener("focus", wake);
+document.addEventListener("visibilitychange", wake);
 addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") pressed = true; });
 addEventListener("pointerup", () => { pressed = false; });
-addEventListener("blur", () => { pressed = false; });
+addEventListener("blur", () => { pressed = false; wake(); });
 addEventListener("scroll", () => waiting.forEach(arm), { passive: true }); // still scrolling: not left yet
 addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
@@ -397,7 +628,10 @@ try { sortEl.value = localStorage.getItem("stratabasor.bottle.sort") || "recent"
 // Anything scrolled or tabbed into view lands below the sticky bar, not under it.
 new ResizeObserver(() => {
   document.documentElement.style.scrollPaddingTop = $("#bar").offsetHeight + 8 + "px";
+  document.documentElement.style.setProperty("--bar-h", $("#bar").offsetHeight + "px");
 }).observe($("#bar"));
+show(null);
+wake();
 start();
 </script>
 </body>
