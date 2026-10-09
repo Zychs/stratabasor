@@ -25,6 +25,7 @@ Reverse-chronological. Dates are local. No version scheme. Stay on Unreleased.
 
 ### Added
 
+- 2026-10-09: Bottle page at `/bottle`, from `bottle` at the foot of the spine. Browses the `.bottle/bottle.db` stores under the known roots as a fractal: items, versions, chapters, eras, precious. Click opens one node; moving the pointer out folds it. Read-only. Self-contained in `bottle/`; `serve.py` loads it by path. The page wears the tint picked in `colors`.
 - 2026-09-23: stratabasor is the main card. The selected repo is its companion card, beside it and offset down. It no longer sits over the dev and durable split. The hover card stacks above the companion.
 - 2026-09-23: Branches checked out in another worktree read "local, other worktree". The git `+` mark no longer leaks into the name.
 - 2026-09-23: Hover tips on tree rows. Detail scales with the pointer's place across the row, four steps. Shown in the hover card. The far step reads the last commit through `/api/detail`, inside known roots only.

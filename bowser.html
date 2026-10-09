@@ -30,12 +30,13 @@
   }
   #tabs { flex: 1; overflow: auto; padding: 0 8px 12px; }
   #spine.collapsed #tabs { display: none; }
-  #tint-open {
+  #tint-open, #bottle-open {
     appearance: none; border: 0; background: transparent; color: var(--soft);
     margin: 0; padding: 14px 18px; text-align: left; font: inherit; cursor: pointer;
   }
-  #tint-open:hover { color: var(--ink); }
-  #spine.collapsed #tint-open span { display: none; }
+  #bottle-open { display: block; padding-bottom: 0; text-decoration: none; }
+  #tint-open:hover, #bottle-open:hover { color: var(--ink); }
+  #spine.collapsed #tint-open span, #spine.collapsed #bottle-open span { display: none; }
   .tab {
     display: block; width: 100%; text-align: left; margin: 0 0 4px;
     padding: 8px 10px; border: 0; border-radius: 2px; background: transparent;
@@ -156,6 +157,7 @@
   <aside id="spine">
     <button id="add" type="button" aria-label="add directory">+</button>
     <nav id="tabs"></nav>
+    <a id="bottle-open" href="/bottle" aria-label="bottle">&#9670; <span>bottle</span></a>
     <button id="tint-open" type="button" aria-label="background color">&#9680; <span>colors</span></button>
   </aside>
   <div id="split" title="drag to resize, click to collapse"></div>
@@ -660,6 +662,7 @@
     Object.keys(t).forEach(function (k) {
       if (k.charAt(0) === "-") document.documentElement.style.setProperty(k, t[k]);
     });
+    try { localStorage.setItem("stratabasor.theme", JSON.stringify(t)); } catch (e) {} // bottle page wears it too
     paintTones();
     tint.querySelectorAll(".swatch").forEach(function (b) {
       b.classList.toggle("on", b.dataset.key === pick.h + ":" + pick.l);

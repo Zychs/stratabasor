@@ -7,18 +7,21 @@ Read-only. The spine starts empty. Key columns live in keybinds.csv.
 from __future__ import annotations
 
 import csv
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 import threading
 import webbrowser
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
 PAGE = ROOT / "bowser.html"
+SHELF = ROOT / "bottle" / "shelf.py"
 BINDS = ROOT / "keybinds.csv"
 SAVED = ROOT / "roots.json"
 PORT = int(os.environ.get("PORT") or 8741)
@@ -204,6 +207,15 @@ def last_commit(repo: str, ref: str = "HEAD") -> dict | None:
     return {"hash": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]}
 
 
+@lru_cache(maxsize=1)
+def bottle_shelf():
+    """The bottle module, loaded by file path on first use so no module name can collide."""
+    spec = importlib.util.spec_from_file_location("stratabasor_shelf", SHELF)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def detail(path: str, branch: str | None) -> dict:
     """The far end of a hover tip. Only asked for when the pointer reaches it."""
     out: dict = {}
@@ -231,6 +243,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _send(self, code: int, kind: str, raw: bytes) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def _read(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
         if n <= 0:
@@ -249,6 +268,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)
+            return
+        if parsed.path == "/bottle" or parsed.path.startswith("/api/bottle/"):
+            roots = list(DEFAULT_ROOTS) + load_roots()
+            self._send(*bottle_shelf().route(parsed.path, parse_qs(parsed.query), roots, under_known_root))
             return
         if parsed.path == "/api/keybinds":
             self._json(200, {"binds": load_binds()})

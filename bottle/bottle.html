@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>bottle · stratabasor</title>
+<!--
+  The bottle page. serve.py serves it at /bottle; bottle/shelf.py feeds it.
+  Five levels, each a smaller copy of the one above:
+    ▣ items     tracked .py files
+    ◈ versions  every saved copy of an item, newest first
+    § chapters  that copy's top-level parts: imports, each def and class, module code
+    ◷ eras      runs of versions in which a chapter's code held still
+    ◆ precious  the chapter's code in that era, diffed against the era before
+  Click opens one node and folds its siblings. Move the pointer out and it folds.
+  Esc folds the deepest open node. Read-only.
+-->
+<style>
+  :root {
+    --bg: #0c1218;
+    --panel: #101820;
+    --ink: #c5d4e6;
+    --soft: #8ea4bc;
+    --line: #243244;
+    --row: #16202b;
+    --rule: #121b24;
+    /* stratabasor's two families: blue and its complement. Mixed into the ink so
+       every tone keeps its distance from whatever background was picked. */
+    --blue: hsl(212 70% 56%);
+    --amber: hsl(32 85% 56%);
+    --add: color-mix(in srgb, hsl(140 60% 45%) 55%, var(--ink));
+    --del: color-mix(in srgb, hsl(0 70% 55%) 55%, var(--ink));
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  }
+  .L-items    { --c: color-mix(in srgb, var(--blue) 60%, var(--ink));  --b: solid;  --r: 6px; }
+  .L-versions { --c: color-mix(in srgb, var(--amber) 60%, var(--ink)); --b: solid;  --r: 5px; }
+  .L-chapters { --c: color-mix(in srgb, var(--blue) 30%, var(--ink));  --b: dashed; --r: 4px; }
+  .L-eras     { --c: color-mix(in srgb, var(--amber) 30%, var(--ink)); --b: dotted; --r: 3px; }
+  .L-precious { --c: color-mix(in srgb, var(--amber) 85%, var(--ink)); --b: double; --r: 2px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 17px/1.45 "Segoe UI", sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+
+  #bar {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    padding: 10px 20px; font-size: 14px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  #bar a { color: var(--soft); text-decoration: none; }
+  #bar a:hover { color: var(--ink); }
+  #bar h1 {
+    margin: 0; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft);
+  }
+  #bar select, #bar input, #bar button {
+    padding: 4px 8px; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 2px;
+  }
+  #bar button { cursor: pointer; }
+  #bar input { width: 12em; }
+  #status { color: var(--soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; }
+  .legend i { font-style: normal; color: var(--c); }
+  @media (max-width: 600px) { .legend { display: none; } }
+  #board { max-width: 1200px; margin: 0 auto; padding: 14px 20px 50vh; }
+  .none { color: var(--soft); }
+
+  /* A node per level. Each level is the one above at .92 scale: the fractal. */
+  .node {
+    margin: 0.4em 0;
+    border: 1px var(--b) color-mix(in srgb, var(--c) 35%, transparent);
+    border-radius: var(--r);
+    background: color-mix(in srgb, var(--c) 5%, var(--panel));
+  }
+  .node.open {
+    border-color: color-mix(in srgb, var(--c) 80%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 15%, transparent), 0 0.5em 1.5em rgb(0 0 0 / 0.3);
+  }
+  .node.L-versions { border-left-width: 3px; }
+  .head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em 0.65em;
+    width: 100%; padding: 0.45em 0.8em;
+    text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer;
+  }
+  .head:hover { background: color-mix(in srgb, var(--c) 9%, transparent); }
+  .head:focus-visible { outline: 2px solid var(--c); outline-offset: -2px; }
+  .mark { color: var(--c); }
+  .name { font-weight: 600; overflow-wrap: anywhere; }
+  .dim, .when, .meta { color: var(--soft); font-weight: 400; }
+  .when { font-size: 0.85em; }
+  .meta { margin-left: auto; font-size: 0.8em; }
+  .tag { padding: 0 0.5em; font-size: 0.75em; border: 1px solid; border-radius: 1em; }
+  .t-new { color: var(--add); }
+  .t-chg { color: color-mix(in srgb, var(--amber) 70%, var(--ink)); }
+  .t-del { color: var(--del); }
+  .t-fmt { color: var(--soft); }
+  .t-here { color: var(--c); }
+  .gone > .head .name { text-decoration: line-through; opacity: 0.65; }
+  .kids {
+    display: none; font-size: 0.92em;
+    margin: 0 0.5em 0.5em 1.05em; padding: 0.05em 0 0.05em 0.7em;
+    border-left: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
+  }
+  .open > .kids { display: block; animation: unfold 0.18s ease-out; }
+  @keyframes unfold { from { opacity: 0; transform: translateY(-0.3em); } }
+  @media (prefers-reduced-motion: reduce) { .open > .kids { animation: none; } }
+
+  .gem {
+    margin: 0.4em 0; padding: 0.45em 0.7em 0.6em;
+    background: color-mix(in srgb, var(--c) 6%, var(--bg));
+    border: 3px var(--b) color-mix(in srgb, var(--c) 60%, transparent);
+    border-radius: var(--r);
+    box-shadow: 0 0 1.4em color-mix(in srgb, var(--c) 15%, transparent);
+  }
+  .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em 0.65em; }
+  .copy {
+    margin-left: auto; padding: 0.1em 0.7em; font-size: 0.75em; cursor: pointer;
+    color: var(--c); background: none; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); border-radius: 1em;
+  }
+  pre {
+    margin: 0.5em 0 0; padding: 0.5em 0; overflow-x: auto;
+    font-family: var(--mono); font-size: max(12px, 0.9em); line-height: 1.5;
+    background: var(--bg); border: 1px solid var(--rule); border-radius: 2px;
+  }
+  pre span {
+    position: relative; display: block; width: max-content; min-width: 100%;
+    padding: 0 1em 0 1.8em; white-space: pre;
+  }
+  pre span::before { position: absolute; left: 0.6em; }
+  pre .add { background: color-mix(in srgb, var(--add) 12%, transparent); }
+  pre .add::before { content: "+"; color: var(--add); }
+  pre .del { color: var(--del); text-decoration: line-through; background: color-mix(in srgb, var(--del) 9%, transparent); }
+  pre .del::before { content: "−"; }
+</style>
+</head>
+<body>
+<header id="bar">
+  <a href="/">&#9666; stratabasor</a>
+  <h1>&#9670; bottle</h1>
+  <select id="pick" aria-label="bottle" hidden></select>
+  <button id="again" type="button" title="read the bottle again" hidden>&#8635;</button>
+  <span id="status">reading the shelf …</span>
+  <input id="filter" type="search" placeholder="filter items" aria-label="filter items" hidden />
+  <select id="sort" aria-label="sort items" hidden>
+    <option value="recent">recent first</option>
+    <option value="name">by name</option>
+  </select>
+  <span class="legend" aria-label="levels">
+    <i class="L-items">&#9635; items</i>
+    <i class="L-versions">&#9672; versions</i>
+    <i class="L-chapters">&sect; chapters</i>
+    <i class="L-eras">&#9719; eras</i>
+    <i class="L-precious">&#9670; precious</i>
+  </span>
+</header>
+<main id="board"></main>
+<script>
+"use strict";
+const GRACE = 280; // ms an open node waits after the pointer leaves before it folds
+const MARK = { items: "▣", versions: "◈", chapters: "§", eras: "◷", precious: "◆" };
+const $ = (s) => document.querySelector(s);
+const board = $("#board"), statusEl = $("#status"), pickEl = $("#pick"), againEl = $("#again");
+const filterEl = $("#filter"), sortEl = $("#sort");
+let bottle = null; // { root, items: [{ path, versions, last, data }] }
+let px = -1, py = -1, pressed = false;
+const waiting = new Set();
+
+// Wear the tint picked in stratabasor's colors overlay.
+try {
+  const t = JSON.parse(localStorage.getItem("stratabasor.theme") || "null");
+  if (t) for (const k in t) if (k[0] === "-") document.documentElement.style.setProperty(k, t[k]);
+} catch (_) {}
+
+function api(path, params) {
+  return fetch(path + "?" + new URLSearchParams(params)).then(async (r) => {
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "HTTP " + r.status);
+    return j;
+  });
+}
+
+function h(tag, cls, ...kids) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  el.append(...kids.filter(Boolean));
+  return el;
+}
+const tag = (text, cls) => h("span", "tag " + cls, text);
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const when = (iso) => fmt.format(new Date(iso));
+function ago(iso) {
+  const m = (Date.now() - Date.parse(iso)) / 6e4;
+  return m < 1 ? "just now" : m < 60 ? `${m | 0}m ago` : m < 1440 ? `${(m / 60) | 0}h ago` : m < 43200 ? `${(m / 1440) | 0}d ago` : when(iso);
+}
+
+/* ---- the shelf ---- */
+
+async function start() {
+  let bottles;
+  try { ({ bottles } = await api("/api/bottle/shelf", {})); }
+  catch (e) { statusEl.textContent = e.message; return; }
+  if (!bottles.length) {
+    statusEl.textContent = "no bottles";
+    board.replaceChildren(h("p", "none", "No bottle under the known roots yet. A bottle is a folder's .bottle/bottle.db, made by bottle.py snapshot."));
+    return;
+  }
+  pickEl.replaceChildren(...bottles.map((b) => {
+    const o = h("option", null, `${b.name} · ${plural(b.items, "item")} · ${ago(b.last)}`);
+    o.value = o.title = b.root;
+    return o;
+  }));
+  let want = new URLSearchParams(location.search).get("root");
+  try { want = want || localStorage.getItem("stratabasor.bottle"); } catch (_) {}
+  pickEl.value = bottles.some((b) => b.root === want) ? want : bottles[0].root;
+  pickEl.hidden = againEl.hidden = false;
+  read(pickEl.value);
+}
+
+async function read(root) {
+  try { localStorage.setItem("stratabasor.bottle", root); } catch (_) {}
+  history.replaceState(null, "", "?root=" + encodeURIComponent(root));
+  statusEl.textContent = "reading …";
+  try {
+    const j = await api("/api/bottle/items", { root });
+    if (pickEl.value !== root) return;
+    bottle = { root, items: j.items };
+    filterEl.hidden = sortEl.hidden = false;
+    render();
+  } catch (e) {
+    statusEl.textContent = e.message;
+  }
+}
+
+function itemData(it) {
+  return (it.data ||= api("/api/bottle/item", { root: bottle.root, path: it.path }).catch((e) => { it.data = null; throw e; }));
+}
+
+function render() {
+  const f = filterEl.value.trim().toLowerCase();
+  const byName = (a, b) => a.path.localeCompare(b.path);
+  const list = bottle.items.filter((it) => it.path.toLowerCase().includes(f))
+    .sort(sortEl.value === "name" ? byName : (a, b) => b.last.localeCompare(a.last) || byName(a, b));
+  const total = bottle.items.reduce((s, it) => s + it.versions, 0);
+  statusEl.textContent = `${plural(bottle.items.length, "item")} · ${plural(total, "version")}`;
+  board.replaceChildren(...(list.length ? list.map(itemNode)
+    : [h("p", "none", bottle.items.length ? "no item matches" : "this bottle is empty")]));
+}
+
+/* ---- the five levels ---- */
+
+function node(level, headKids, build, cls) {
+  const n = h("div", `node L-${level}${cls ? " " + cls : ""}`);
+  const head = h("button", "head", h("span", "mark", MARK[level]), ...headKids);
+  head.type = "button";
+  head.setAttribute("aria-expanded", "false");
+  const kids = h("div", "kids");
+  kids.setAttribute("role", "group");
+  n.append(head, kids);
+  n._build = build;
+  n.addEventListener("mouseenter", () => { clearTimeout(n._t); waiting.delete(n); });
+  n.addEventListener("mouseleave", () => n.classList.contains("open") && arm(n));
+  return n;
+}
+
+function itemNode(it) {
+  const cut = it.path.lastIndexOf("/") + 1;
+  return node("items", [
+    h("span", "name", h("span", "dim", it.path.slice(0, cut)), it.path.slice(cut)),
+    h("span", "meta", `${plural(it.versions, "version")} · ${ago(it.last)}`),
+  ], () => itemData(it).then((d) => d.versions.slice().reverse().map((v) => versionNode(d, v))));
+}
+
+function versionNode(d, v) {
+  const x = v.delta;
+  const tags = !v.parsed ? [tag("syntax error", "t-del")]
+    : !x ? [tag("first", "t-new")]
+    : x.unparsed ? [tag("after a syntax error", "t-fmt")]
+    : !x.add && !x.chg && !x.del ? [tag("≈ comments / format", "t-fmt")]
+    : [x.add && tag("+" + x.add, "t-new"), x.chg && tag("~" + x.chg, "t-chg"), x.del && tag("−" + x.del, "t-del")];
+  return node("versions", [
+    h("span", "name", "v" + v.n), h("span", "when", when(v.at)), ...tags,
+    h("span", "meta", `${plural(v.lines, "line")} · ${v.sha.slice(0, 8)}`),
+  ], () => (v.chapters.length ? v.chapters.map((c) => chapterNode(d, v, c)) : [h("p", "none", "empty file")]));
+}
+
+function chapterNode(d, v, c) {
+  const label = c.kind === "def" || c.kind === "class" ? c.kind + " " + c.name : c.name;
+  const status = { new: tag("new", "t-new"), changed: tag("changed", "t-chg"), removed: tag("removed", "t-del") }[c.status];
+  return node("chapters", [h("span", "name", label), status, h("span", "meta", plural(c.lines, "line"))],
+    () => d.eras[c.key].slice().reverse().map((e, i, all) => eraNode(d, v, c.key, e, i + 1 < all.length)),
+    c.status === "removed" ? "gone" : null);
+}
+
+function eraNode(d, v, key, e, hasBefore) {
+  const next = d.versions[e.to]; // the first version after the era
+  const ends = next && !next.chapters.some((c) => c.key === key && c.status !== "removed");
+  const fate = !ends ? null : key === "unparsed" ? "then fixed" : next.parsed ? "then removed" : "then unparsed";
+  return node("eras", [
+    h("span", "name", e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`),
+    h("span", "when", `${when(d.versions[e.from - 1].at)} → ${next ? when(next.at) : "now"}`),
+    v.n >= e.from && v.n <= e.to && tag("◉ v" + v.n, "t-here"),
+    fate && tag(fate, "t-del"),
+    h("span", "meta", plural(e.to - e.from + 1, "version")),
+  ], () => [precious(e, hasBefore)]);
+}
+
+function precious(e, hasBefore) {
+  const text = e.rows.filter((r) => r[0] !== "-").map((r) => r[1]).join("\n");
+  const count = (op) => e.rows.filter((r) => r[0] === op).length;
+  const copy = h("button", "copy", "copy");
+  copy.type = "button";
+  copy.onclick = () => navigator.clipboard.writeText(text).then(
+    () => { copy.textContent = "copied"; }, () => { copy.textContent = "copy blocked"; });
+  return h("div", "gem L-precious",
+    h("div", "row", h("span", "mark", MARK.precious), h("span", "name", "precious"),
+      h("span", "when", plural(text.split("\n").length, "line")),
+      hasBefore && tag("+" + count("+"), "t-new"), hasBefore && tag("−" + count("-"), "t-del"), copy),
+    h("pre", null, ...e.rows.map(([op, line]) => h("span", op === "+" ? "add" : op === "-" ? "del" : null, line || " "))));
+}
+
+/* ---- click opens one, leaving folds ---- */
+
+// Run fn without moving the anchor on screen, so content changing above the pointer can't slide under it.
+function keep(anchor, fn) {
+  const y = anchor?.getBoundingClientRect().top;
+  fn();
+  if (anchor?.isConnected) scrollBy(0, anchor.getBoundingClientRect().top - y);
+}
+
+function unfold(n) {
+  for (const sib of n.parentElement.children) if (sib !== n && sib.classList.contains("open")) fold(sib);
+  const kids = n.lastElementChild, made = n._build(), gen = (n._gen = (n._gen || 0) + 1);
+  n.classList.add("open");
+  n.firstElementChild.setAttribute("aria-expanded", "true");
+  if (!(made instanceof Promise)) return kids.replaceChildren(...made);
+  kids.replaceChildren(h("p", "none", "…"));
+  made.then(
+    (list) => { if (n._gen === gen && n.classList.contains("open")) kids.replaceChildren(...list); },
+    (err) => { if (n._gen === gen) kids.replaceChildren(h("p", "none", err.message)); });
+}
+
+function fold(n) {
+  clearTimeout(n._t);
+  waiting.delete(n);
+  n._gen = (n._gen || 0) + 1;
+  n.classList.remove("open");
+  n.firstElementChild.setAttribute("aria-expanded", "false");
+  n.lastElementChild.replaceChildren();
+}
+
+function arm(n) {
+  clearTimeout(n._t);
+  waiting.add(n);
+  n._t = setTimeout(() => { waiting.delete(n); leave(n); }, GRACE);
+}
+
+function leave(n) {
+  if (!n.isConnected || !n.classList.contains("open") || n.matches(":hover")) return;
+  if (pressed) return arm(n); // mid-drag (selecting, scrollbar): wait for the release
+  const was = n.getBoundingClientRect();
+  fold(n);
+  // Left downward: hold whatever the pointer moved onto still while this node shrinks above it.
+  if (py > was.bottom) scrollBy(0, n.getBoundingClientRect().height - was.height);
+}
+
+board.addEventListener("click", (e) => {
+  const head = e.target.closest(".head");
+  if (!head) return;
+  const n = head.parentElement;
+  keep(head, () => (n.classList.contains("open") ? fold(n) : unfold(n)));
+});
+addEventListener("mousemove", (e) => { px = e.clientX; py = e.clientY; }, { passive: true });
+addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") pressed = true; });
+addEventListener("pointerup", () => { pressed = false; });
+addEventListener("blur", () => { pressed = false; });
+addEventListener("scroll", () => waiting.forEach(arm), { passive: true }); // still scrolling: not left yet
+addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const n = [...board.querySelectorAll(".node.open")].pop();
+  if (!n) return;
+  const focused = n.contains(document.activeElement);
+  fold(n);
+  if (focused) n.firstElementChild.focus();
+});
+
+pickEl.addEventListener("change", () => read(pickEl.value));
+againEl.addEventListener("click", () => read(pickEl.value));
+filterEl.addEventListener("input", render);
+sortEl.addEventListener("change", () => {
+  try { localStorage.setItem("stratabasor.bottle.sort", sortEl.value); } catch (_) {}
+  render();
+});
+try { sortEl.value = localStorage.getItem("stratabasor.bottle.sort") || "recent"; } catch (_) {}
+// Anything scrolled or tabbed into view lands below the sticky bar, not under it.
+new ResizeObserver(() => {
+  document.documentElement.style.scrollPaddingTop = $("#bar").offsetHeight + 8 + "px";
+}).observe($("#bar"));
+start();
+</script>
+</body>
+</html>
