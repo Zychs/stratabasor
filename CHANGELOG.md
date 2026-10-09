@@ -17,6 +17,7 @@ Reverse-chronological. Dates are local. No version scheme. Stay on Unreleased.
 
 ### Changed
 
+- 2026-10-09: Bottle page trimmed. No ornament: no serif, numerals, fleuron, ribbon, glow, or animation. Denser rows, and brightness carries importance: changed chapters, the era holding the version, and the lines an era brought read bright; the rest steps back. A fold no longer slides content under the pointer at the top of the page.
 - 2026-09-25: Merged the hover card from upstream. The selected directory stays the third column; the dock beside the tree now holds only the hover card, themed from the background pick.
 
 - 2026-09-24: The selected directory is a third column beside dev and durable, not a card over them. It changes whenever a folder, repo, or branch group is picked. A file pick leaves it alone.

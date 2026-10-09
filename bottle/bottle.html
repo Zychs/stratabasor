@@ -4,223 +4,136 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>bottle · stratabasor</title>
-<!--
-  The bottle page. serve.py serves it at /bottle; bottle/shelf.py feeds it.
-  Five levels, each a smaller copy of the one above:
-    ▣ items     tracked .py files
-    ◈ versions  every saved copy of an item, newest first
-    § chapters  that copy's top-level parts: imports, each def and class, module code
-    ◷ eras      runs of versions in which a chapter's code held still
-    ◆ precious  the chapter's code in that era, diffed against the era before
-  Click opens one node and folds its siblings. Move the pointer out and it folds.
-  Esc folds the deepest open node. Read-only.
--->
+<!-- The bottle page, served at /bottle and fed by shelf.py; its docstring names the five levels. -->
 <style>
   :root {
-    --bg: #0c1218;
-    --panel: #101820;
-    --ink: #c5d4e6;
-    --soft: #8ea4bc;
-    --line: #243244;
-    --row: #16202b;
-    --rule: #121b24;
-    /* stratabasor's two families: blue and its complement. Mixed into the ink so
-       every tone keeps its distance from whatever background was picked. */
-    --blue: hsl(212 70% 56%);
-    --amber: hsl(32 85% 56%);
+    --bg: #0c1218; --panel: #101820; --ink: #c5d4e6; --soft: #8ea4bc; --line: #243244;
+    /* stratabasor's two families, mixed into the ink so every tone keeps its distance from the picked background */
+    --blue: hsl(212 70% 56%); --amber: hsl(32 85% 56%);
     --add: color-mix(in srgb, hsl(140 60% 45%) 55%, var(--ink));
     --del: color-mix(in srgb, hsl(0 70% 55%) 55%, var(--ink));
+    --chg: color-mix(in srgb, var(--amber) 70%, var(--ink));
     --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
   }
-  .L-items    { --c: color-mix(in srgb, var(--blue) 60%, var(--ink));  --b: solid;  --r: 6px; }
-  .L-versions { --c: color-mix(in srgb, var(--amber) 60%, var(--ink)); --b: solid;  --r: 5px; }
-  .L-chapters { --c: color-mix(in srgb, var(--blue) 30%, var(--ink));  --b: dashed; --r: 4px; }
-  .L-eras     { --c: color-mix(in srgb, var(--amber) 30%, var(--ink)); --b: dotted; --r: 3px; }
-  .L-precious { --c: color-mix(in srgb, var(--amber) 85%, var(--ink)); --b: double; --r: 2px; }
+  .L-items    { --c: color-mix(in srgb, var(--blue) 60%, var(--ink));  --b: solid; }
+  .L-versions { --c: color-mix(in srgb, var(--amber) 60%, var(--ink)); --b: solid; }
+  .L-chapters { --c: color-mix(in srgb, var(--blue) 30%, var(--ink));  --b: dashed; }
+  .L-eras     { --c: color-mix(in srgb, var(--amber) 30%, var(--ink)); --b: dotted; }
+  .L-precious { --c: color-mix(in srgb, var(--amber) 85%, var(--ink)); --b: double; }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); }
-  body { font: 17px/1.45 "Segoe UI", sans-serif; }
+  body { font: 15px/1.4 "Segoe UI", sans-serif; }
   button, input, select { font: inherit; color: inherit; }
 
   #bar {
-    position: sticky; top: 0; z-index: 2;
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
-    padding: 10px 20px; font-size: 14px;
-    background: var(--panel); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+    padding: 6px 16px; font-size: 13px; background: var(--panel); border-bottom: 1px solid var(--line);
   }
   #bar a { color: var(--soft); text-decoration: none; }
-  #bar a:hover { color: var(--ink); }
-  #bar h1 {
-    margin: 0; font-size: 12px; font-weight: 600;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft);
-  }
-  #bar select, #bar input, #bar button {
-    padding: 4px 8px; background: var(--bg);
-    border: 1px solid var(--line); border-radius: 2px;
-  }
-  #bar button { cursor: pointer; }
-  #bar input { width: 12em; }
-  #status { color: var(--soft); }
-  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-left: auto; }
+  #bar h1 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); }
+  #bar select, #bar input, #bar button { padding: 2px 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; }
+  #bar input { width: 11em; }
+  #status, .none { color: var(--soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-left: auto; }
   .legend i { font-style: normal; color: var(--c); }
   @media (max-width: 600px) { .legend { display: none; } }
   #page {
-    display: grid; grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); gap: 20px; align-items: start;
-    max-width: 1680px; margin: 0 auto; padding: 14px 20px 50vh;
+    display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 32vw, 460px); gap: 16px; align-items: start;
+    max-width: 1680px; margin: 0 auto; padding: 10px 16px 50vh;
   }
-  #board { min-width: 0; }
-  @media (max-width: 980px) {
-    #page { grid-template-columns: minmax(0, 1fr); }
-    #book { display: none; }
-  }
-  .none { color: var(--soft); }
+  @media (max-width: 980px) { #page { grid-template-columns: minmax(0, 1fr); } #book { display: none; } }
 
-  /* A node per level. Each level is the one above at .92 scale: the fractal. */
+  /* A node per level, each the one above at .92 scale. Brightness carries importance: what
+     changed reads at full ink, what held still steps back to soft. */
   .node {
-    margin: 0.4em 0;
-    border: 1px var(--b) color-mix(in srgb, var(--c) 35%, transparent);
-    border-radius: var(--r);
+    margin: 0.2em 0; border: 1px var(--b) color-mix(in srgb, var(--c) 35%, transparent); border-radius: 2px;
     background: color-mix(in srgb, var(--c) 5%, var(--panel));
   }
-  .node.open {
-    border-color: color-mix(in srgb, var(--c) 80%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 15%, transparent), 0 0.5em 1.5em rgb(0 0 0 / 0.3);
-  }
+  .node.open { border-color: var(--c); }
   .node.L-versions { border-left-width: 3px; }
   .head {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em 0.65em;
-    width: 100%; padding: 0.45em 0.8em;
-    text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15em 0.5em; width: 100%; padding: 0.25em 0.6em;
+    text-align: left; background: none; border: 0; cursor: pointer;
   }
   .head:hover { background: color-mix(in srgb, var(--c) 9%, transparent); }
-  .head:focus-visible { outline: 2px solid var(--c); outline-offset: -2px; }
+  .head:focus-visible { outline: 1px solid var(--c); outline-offset: -1px; }
   .mark { color: var(--c); }
   .name { font-weight: 600; overflow-wrap: anywhere; }
-  .dim, .when, .meta { color: var(--soft); font-weight: 400; }
+  .dim, .when, .meta, .quiet > .head .name { color: var(--soft); font-weight: 400; }
   .when { font-size: 0.85em; }
   .meta { margin-left: auto; font-size: 0.8em; }
-  .tag { padding: 0 0.5em; font-size: 0.75em; border: 1px solid; border-radius: 1em; }
+  .tag { font-size: 0.8em; }
   .t-new { color: var(--add); }
-  .t-chg { color: color-mix(in srgb, var(--amber) 70%, var(--ink)); }
+  .t-chg { color: var(--chg); }
   .t-del { color: var(--del); }
   .t-fmt { color: var(--soft); }
-  .t-here { color: var(--c); }
-  .gone > .head .name { text-decoration: line-through; opacity: 0.65; }
+  .gone > .head .name { color: var(--soft); text-decoration: line-through; }
   .kids {
-    display: none; font-size: 0.92em;
-    margin: 0 0.5em 0.5em 1.05em; padding: 0.05em 0 0.05em 0.7em;
+    display: none; font-size: 0.92em; margin: 0 0.4em 0.3em 0.9em; padding-left: 0.5em;
     border-left: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
   }
-  .open > .kids { display: block; animation: unfold 0.18s ease-out; }
-  @keyframes unfold { from { opacity: 0; transform: translateY(-0.3em); } }
-  @media (prefers-reduced-motion: reduce) { .open > .kids { animation: none; } }
+  .open > .kids { display: block; }
 
-  .gem {
-    margin: 0.4em 0; padding: 0.45em 0.7em 0.6em;
-    background: color-mix(in srgb, var(--c) 6%, var(--bg));
-    border: 3px var(--b) color-mix(in srgb, var(--c) 60%, transparent);
-    border-radius: var(--r);
-    box-shadow: 0 0 1.4em color-mix(in srgb, var(--c) 15%, transparent);
-  }
-  .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2em 0.65em; }
-  .copy {
-    margin-left: auto; padding: 0.1em 0.7em; font-size: 0.75em; cursor: pointer;
-    color: var(--c); background: none; border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); border-radius: 1em;
-  }
-  pre {
-    margin: 0.5em 0 0; padding: 0.5em 0; overflow-x: auto;
-    font-family: var(--mono); font-size: max(12px, 0.9em); line-height: 1.5;
-    background: var(--bg); border: 1px solid var(--rule); border-radius: 2px;
-  }
-  pre span {
-    position: relative; display: block; width: max-content; min-width: 100%;
-    padding: 0 1em 0 1.8em; white-space: pre;
-  }
-  pre span::before { position: absolute; left: 0.6em; }
-  pre .add { background: color-mix(in srgb, var(--add) 12%, transparent); }
+  .gem { margin: 0.2em 0; padding: 0.3em 0.5em 0.4em; border: 3px double var(--c); border-radius: 2px; background: var(--bg); }
+  .row { display: flex; align-items: baseline; gap: 0.5em; }
+  .copy { margin-left: auto; padding: 0 0.4em; font-size: 0.8em; color: var(--c); background: none; border: 1px solid var(--line); cursor: pointer; }
+  pre { margin: 0.3em 0 0; padding: 0.3em 0; overflow-x: auto; font: max(12px, 0.9em)/1.45 var(--mono); }
+  pre span { position: relative; display: block; width: max-content; min-width: 100%; padding: 0 1em 0 1.6em; white-space: pre; }
+  pre span::before { position: absolute; left: 0.5em; }
+  pre.diff span { color: var(--soft); }
+  pre.diff .add { color: var(--ink); }
   pre .add::before { content: "+"; color: var(--add); }
-  pre .del { color: var(--del); text-decoration: line-through; background: color-mix(in srgb, var(--del) 9%, transparent); }
+  pre .del { color: var(--del); text-decoration: line-through; }
   pre .del::before { content: "−"; }
 
-  /* The book card. House negentropic-blue (journal-clip clip_look.py: ink, cyan frame, void),
-     set like a book's chapter. --a is attention, 0 to 1: the frame lights, the text comes into
-     focus and the ribbon lengthens as it rises. */
+  /* The book card, in house negentropic-blue (journal-clip clip_look.py). --a is attention, 0 to 1:
+     the frame lights and the text comes up to full contrast as it gathers. */
   #book {
-    --nb-bg: #050509; --nb-void: #0a0a10; --nb-line: #272739;
-    --nb-ink: #e7e7f2; --nb-strong: #f4f4fb; --nb-soft: #a7a7bd; --nb-mute: #6c6c83;
-    --nb-cyan: #7cf7ff; --nb-cyan-soft: #9fe9f1; --nb-cyan-deep: #28a2b2; --nb-amber: #e2a24a; --nb-good: #4cae7c;
-    --nb-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
-    --serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --nb-bg: #050509; --nb-void: #0a0a10; --nb-line: #272739; --nb-ink: #e7e7f2; --nb-strong: #f4f4fb;
+    --nb-soft: #a7a7bd; --nb-mute: #6c6c83; --nb-cyan: #7cf7ff; --nb-cyan-soft: #9fe9f1; --nb-amber: #e2a24a;
+    --nb-good: #4cae7c; --nb-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
     --a: 0;
-    position: sticky; top: calc(var(--bar-h, 64px) + 12px);
+    position: sticky; top: calc(var(--bar-h, 40px) + 10px); max-height: calc(100vh - var(--bar-h, 40px) - 20px);
+    overflow: auto; overscroll-behavior: contain; padding: 10px 14px 12px;
     color: var(--nb-ink); background: var(--nb-void);
     border: 1px solid color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 100%), var(--nb-line));
-    box-shadow:
-      0 0 calc(var(--a) * 26px) color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 20%), transparent),
-      0 18px 40px rgb(0 0 0 / 0.5);
-  }
-  #book .leaf {
-    max-height: calc(100vh - var(--bar-h, 64px) - 28px); overflow: auto; overscroll-behavior: contain;
-    padding: 18px 28px 22px;
-  }
-  #book .ribbon {
-    position: absolute; top: -1px; right: 22px; z-index: 1; width: 10px; height: calc(12px + var(--a) * 64px);
-    background: linear-gradient(var(--nb-cyan-deep), var(--nb-cyan));
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
   }
   #book .mast {
-    display: flex; justify-content: space-between; gap: 12px;
-    margin: 0 18px 20px 0; padding-bottom: 8px; border-bottom: 1px solid var(--nb-line);
-    font: 11px/1.3 var(--nb-mono); letter-spacing: 0.08em; color: var(--nb-cyan);
+    display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--nb-line); font: 11px/1.3 var(--nb-mono); color: var(--nb-cyan);
   }
   #book .mast span { overflow-wrap: anywhere; }
-  #book .mast span + span { color: var(--nb-mute); white-space: nowrap; }
-  #book .numeral {
-    text-align: center; font: 600 13px/1 var(--serif); letter-spacing: 0.32em; text-transform: uppercase;
-    color: color-mix(in srgb, var(--nb-cyan) calc(var(--a) * 100%), var(--nb-mute));
-  }
-  #book h2 {
-    margin: 0.45em 0 0.2em; text-align: center; overflow-wrap: anywhere;
-    font: 400 30px/1.15 var(--serif); color: var(--nb-strong);
-  }
-  #book .epigraph { margin: 0.7em 0 0 18%; text-align: right; font: italic 15px/1.45 var(--serif); color: var(--nb-soft); }
-  #book .epigraph cite { display: block; margin-top: 0.2em; font: normal 11px/1.4 var(--nb-mono); color: var(--nb-mute); }
-  #book .fleuron { margin: 16px 0 14px; text-align: center; font-size: 18px; letter-spacing: 0.6em; color: var(--nb-cyan-deep); }
-  #book .text {
-    margin: 0; padding: 10px 0; overflow-x: auto;
-    font: 13px/1.55 var(--nb-mono); color: var(--nb-strong);
-    background: var(--nb-bg); border: 1px solid var(--nb-line);
-  }
-  #book .text span { position: relative; display: block; width: max-content; min-width: 100%; padding: 0 14px 0 3.8em; white-space: pre; }
-  #book .text span::before { content: attr(data-n); position: absolute; left: 0; width: 3em; text-align: right; color: var(--nb-mute); }
-  /* negentropy: what is read comes into order as attention gathers */
-  #book .text, #book .toc { opacity: calc(0.55 + 0.45 * var(--a)); filter: blur(calc((1 - var(--a)) * 0.8px)); }
-  #book .toc { margin: 0; padding: 0; list-style: none; }
-  #book button { appearance: none; padding: 2px 4px; font: inherit; color: var(--nb-cyan-soft); background: none; border: 0; cursor: pointer; }
-  #book button:hover { color: var(--nb-cyan); }
+  #book .mast span + span { white-space: nowrap; color: var(--nb-mute); }
+  #book h2 { margin: 0 0 2px; font-size: 17px; line-height: 1.25; font-weight: 600; color: var(--nb-strong); overflow-wrap: anywhere; }
+  #book .n { color: var(--nb-mute); font-weight: 400; }
+  #book .doc { margin: 0; color: var(--nb-soft); }
+  #book .held { margin: 2px 0 6px; font: 11px var(--nb-mono); color: var(--nb-mute); }
+  #book .text { margin: 0; padding: 6px 0; font: 12.5px/1.5 var(--nb-mono); color: var(--nb-strong); background: var(--nb-bg); border: 1px solid var(--nb-line); }
+  #book .text span { padding-left: 3.6em; }
+  #book .text span::before { content: attr(data-n); left: 0; width: 2.9em; text-align: right; color: var(--nb-mute); }
+  #book .text.diff span { color: var(--nb-soft); }
+  #book .text.diff .add { color: var(--nb-strong); }
+  #book .text, #book .toc { opacity: calc(0.55 + 0.45 * var(--a)); }
+  #book .t-new { color: var(--nb-good); }
+  #book .t-chg { color: var(--nb-amber); }
+  #book .t-del, #book .t-fmt { color: var(--nb-mute); }
+  #book button { padding: 1px 2px; font: inherit; color: var(--nb-cyan-soft); background: none; border: 0; cursor: pointer; }
   #book button:focus-visible { outline: 1px solid var(--nb-cyan); }
-  #book .toc button { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 3px 0; text-align: left; font: 15px/1.4 var(--serif); color: var(--nb-ink); }
-  #book .toc .n { flex: none; width: 3.4em; text-align: right; font: 11px var(--nb-mono); letter-spacing: 0.1em; color: var(--nb-mute); }
-  #book .toc .lead { flex: 1; min-width: 1em; border-bottom: 1px dotted var(--nb-line); transform: translateY(-0.3em); }
-  #book .toc .pg { font: 12px var(--nb-mono); color: var(--nb-soft); }
+  #book .toc { margin: 4px 0 0; padding: 0; list-style: none; }
+  #book .toc button { display: flex; gap: 8px; width: 100%; text-align: left; color: var(--nb-ink); }
+  #book .toc .pg { margin-left: auto; font: 11px var(--nb-mono); color: var(--nb-mute); }
+  #book .toc .quiet button, #book .toc .removed button { color: var(--nb-soft); }
+  #book .toc .removed .nm { text-decoration: line-through; }
   #book .toc .new .n { color: var(--nb-good); }
   #book .toc .changed .n { color: var(--nb-amber); }
-  #book .toc .removed .nm { text-decoration: line-through; color: var(--nb-mute); }
-  #book .folio {
-    display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; margin-top: 16px;
-    font: 12px var(--nb-mono); color: var(--nb-mute);
-  }
-  #book .folio b { font: 400 14px var(--serif); letter-spacing: 0.2em; color: var(--nb-soft); }
-  #book .folio button:last-child { justify-self: end; }
-  #book .folio button:first-child { justify-self: start; }
-  #book .where { margin-top: 4px; text-align: center; font: 11px var(--nb-mono); color: var(--nb-mute); }
-  @media (prefers-reduced-motion: reduce) { #book .text, #book .toc { filter: none; } }
+  #book .folio { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font: 11px var(--nb-mono); color: var(--nb-mute); }
+  #book .folio > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
 <header id="bar">
   <a href="/">&#9666; stratabasor</a>
-  <h1>&#9670; bottle</h1>
+  <h1>bottle</h1>
   <select id="pick" aria-label="bottle" hidden></select>
   <button id="again" type="button" title="read the bottle again" hidden>&#8635;</button>
   <span id="status">reading the shelf …</span>
@@ -239,18 +152,19 @@
 </header>
 <main id="page">
   <div id="board"></div>
-  <aside id="book" aria-label="book card"><i class="ribbon" aria-hidden="true"></i><div class="leaf"></div></aside>
+  <aside id="book" aria-label="book card"></aside>
 </main>
 <script>
 "use strict";
 const GRACE = 280; // ms an open node waits after the pointer leaves before it folds
+const SETTLE = 0.3; // attention-seconds a node needs before the card turns to it
 const MARK = { items: "▣", versions: "◈", chapters: "§", eras: "◷", precious: "◆" };
 const $ = (s) => document.querySelector(s);
-const board = $("#board"), statusEl = $("#status"), pickEl = $("#pick"), againEl = $("#again");
+const board = $("#board"), bookEl = $("#book"), statusEl = $("#status"), pickEl = $("#pick"), againEl = $("#again");
 const filterEl = $("#filter"), sortEl = $("#sort");
 let bottle = null; // { root, items: [{ path, versions, last, data }] }
-let px = -1, py = -1, pressed = false;
-const waiting = new Set();
+let py = -1, pressed = false;
+const waiting = new Set(), holds = new Set();
 
 // Wear the tint picked in stratabasor's colors overlay.
 try {
@@ -272,14 +186,38 @@ function h(tag, cls, ...kids) {
   el.append(...kids.filter(Boolean));
   return el;
 }
+function act(el, fn) {
+  el.type = "button";
+  el.onclick = fn;
+  return el;
+}
 const tag = (text, cls) => h("span", "tag " + cls, text);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const fmt = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const when = (iso) => fmt.format(new Date(iso));
 function ago(iso) {
   const m = (Date.now() - Date.parse(iso)) / 6e4;
   return m < 1 ? "just now" : m < 60 ? `${m | 0}m ago` : m < 1440 ? `${(m / 60) | 0}h ago` : m < 43200 ? `${(m / 1440) | 0}d ago` : when(iso);
 }
+const label = (c) => ({ module: "module code", unparsed: "whole file" })[c.key] || c.key;
+const span = (e) => (e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`);
+const STATUS = { new: "t-new", changed: "t-chg", removed: "t-del" };
+// An era's life: from its first version to the version that ended it.
+function life(d, e) {
+  const next = d.versions[e.to];
+  return `${when(d.versions[e.from - 1].at)} → ${next ? when(next.at) : "now"}`;
+}
+// What a version changed, as tags: shared by the fractal and the card.
+function summary(v) {
+  const x = v.delta;
+  if (!v.parsed) return [tag("syntax error", "t-del")];
+  if (!x) return [tag("first", "t-new")];
+  if (x.unparsed) return [tag("after syntax error", "t-fmt")];
+  if (!x.add && !x.chg && !x.del) return [tag("≈ cosmetic", "t-fmt")];
+  return [x.add && tag("+" + x.add, "t-new"), x.chg && tag("~" + x.chg, "t-chg"), x.del && tag("−" + x.del, "t-del")].filter(Boolean);
+}
+// A chapter that held still through this version steps back; in a first or unparsed version none can.
+const quiet = (v, c) => Boolean(v.delta && !v.delta.unparsed && !c.status);
 
 /* ---- the shelf ---- */
 
@@ -288,12 +226,11 @@ async function start() {
   try { ({ bottles } = await api("/api/bottle/shelf", {})); }
   catch (e) { statusEl.textContent = e.message; return; }
   if (!bottles.length) {
-    statusEl.textContent = "no bottles";
-    board.replaceChildren(h("p", "none", "No bottle under the known roots yet. A bottle is a folder's .bottle/bottle.db, made by bottle.py snapshot."));
+    statusEl.textContent = "no bottles under the known roots (.bottle/bottle.db, from bottle.py snapshot)";
     return;
   }
   pickEl.replaceChildren(...bottles.map((b) => {
-    const o = h("option", null, `${b.name} · ${plural(b.items, "item")} · ${ago(b.last)}`);
+    const o = h("option", null, `${b.name} · ${ago(b.last)}`);
     o.value = o.title = b.root;
     return o;
   }));
@@ -337,8 +274,8 @@ function render() {
 
 /* ---- the five levels ---- */
 
-function node(level, headKids, build, cls) {
-  const n = h("div", `node L-${level}${cls ? " " + cls : ""}`);
+function node(level, headKids, build, cls, subject) {
+  const n = h("div", `node L-${level} ${cls || ""}`);
   const head = h("button", "head", h("span", "mark", MARK[level]), ...headKids);
   head.type = "button";
   head.setAttribute("aria-expanded", "false");
@@ -346,6 +283,7 @@ function node(level, headKids, build, cls) {
   kids.setAttribute("role", "group");
   n.append(head, kids);
   n._build = build;
+  n._subject = subject;
   n.addEventListener("mouseenter", () => { clearTimeout(n._t); waiting.delete(n); });
   n.addEventListener("mouseleave", () => n.classList.contains("open") && arm(n));
   return n;
@@ -360,142 +298,90 @@ function itemNode(it) {
 }
 
 function versionNode(d, v) {
-  const x = v.delta;
-  const tags = !v.parsed ? [tag("syntax error", "t-del")]
-    : !x ? [tag("first", "t-new")]
-    : x.unparsed ? [tag("after a syntax error", "t-fmt")]
-    : !x.add && !x.chg && !x.del ? [tag("≈ comments / format", "t-fmt")]
-    : [x.add && tag("+" + x.add, "t-new"), x.chg && tag("~" + x.chg, "t-chg"), x.del && tag("−" + x.del, "t-del")];
-  const n = node("versions", [
-    h("span", "name", "v" + v.n), h("span", "when", when(v.at)), ...tags,
-    h("span", "meta", `${plural(v.lines, "line")} · ${v.sha.slice(0, 8)}`),
-  ], () => (v.chapters.length ? v.chapters.map((c) => chapterNode(d, v, c)) : [h("p", "none", "empty file")]));
-  n._subject = { d, v };
-  return n;
+  return node("versions", [
+    h("span", "name", "v" + v.n), h("span", "when", when(v.at)), ...summary(v),
+    h("span", "meta", `${plural(v.lines, "line")} · ${v.sha}`),
+  ], () => (v.chapters.length ? v.chapters.map((c) => chapterNode(d, v, c)) : [h("p", "none", "empty file")]), "", { d, v });
 }
 
 function chapterNode(d, v, c) {
-  const status = { new: tag("new", "t-new"), changed: tag("changed", "t-chg"), removed: tag("removed", "t-del") }[c.status];
-  const n = node("chapters", [h("span", "name", label(c)), status, h("span", "meta", plural(c.lines, "line"))],
+  return node("chapters", [h("span", "name", label(c)), c.status && tag(c.status, STATUS[c.status]), h("span", "meta", plural(c.lines, "line"))],
     () => d.eras[c.key].slice().reverse().map((e, i, all) => eraNode(d, v, c, e, i + 1 < all.length)),
-    c.status === "removed" ? "gone" : null);
-  n._subject = { d, v, c };
-  return n;
+    c.status === "removed" ? "gone" : quiet(v, c) ? "quiet" : "", { d, v, c });
 }
 
 function eraNode(d, v, c, e, hasBefore) {
-  const key = c.key, next = d.versions[e.to]; // the first version after the era
-  const ends = next && !next.chapters.some((x) => x.key === key && x.status !== "removed");
-  const fate = !ends ? null : key === "unparsed" ? "then fixed" : next.parsed ? "then removed" : "then unparsed";
-  const n = node("eras", [
-    h("span", "name", e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`),
-    h("span", "when", `${when(d.versions[e.from - 1].at)} → ${next ? when(next.at) : "now"}`),
-    v.n >= e.from && v.n <= e.to && tag("◉ v" + v.n, "t-here"),
-    fate && tag(fate, "t-del"),
+  const next = d.versions[e.to]; // the first version after the era
+  const ends = next && !next.chapters.some((x) => x.key === c.key && x.status !== "removed");
+  const fate = ends && (c.key === "unparsed" ? "then fixed" : next.parsed ? "then removed" : "then unparsed");
+  return node("eras", [
+    h("span", "name", span(e)), h("span", "when", life(d, e)), fate && tag(fate, "t-del"),
     h("span", "meta", plural(e.to - e.from + 1, "version")),
-  ], () => [precious(e, hasBefore)]);
-  n._subject = { d, v, c, e };
-  return n;
+  ], () => [precious(e, hasBefore)], e.from <= v.n && v.n <= e.to ? "" : "quiet", { d, v, c, e });
 }
 
 function precious(e, hasBefore) {
-  const text = e.rows.filter((r) => r[0] !== "-").map((r) => r[1]).join("\n");
+  const lines = e.rows.filter((r) => r[0] !== "-").map((r) => r[1]);
   const count = (op) => e.rows.filter((r) => r[0] === op).length;
-  const copy = h("button", "copy", "copy");
-  copy.type = "button";
-  copy.onclick = () => navigator.clipboard.writeText(text).then(
-    () => { copy.textContent = "copied"; }, () => { copy.textContent = "copy blocked"; });
+  const copy = act(h("button", "copy", "copy"), () => navigator.clipboard.writeText(lines.join("\n")).then(
+    () => { copy.textContent = "copied"; }, () => { copy.textContent = "copy blocked"; }));
   return h("div", "gem L-precious",
-    h("div", "row", h("span", "mark", MARK.precious), h("span", "name", "precious"),
-      h("span", "when", plural(text.split("\n").length, "line")),
+    h("div", "row", h("span", "mark", MARK.precious), h("span", "when", plural(lines.length, "line")),
       hasBefore && tag("+" + count("+"), "t-new"), hasBefore && tag("−" + count("-"), "t-del"), copy),
-    h("pre", null, ...e.rows.map(([op, line]) => h("span", op === "+" ? "add" : op === "-" ? "del" : null, line || " "))));
+    h("pre", hasBefore ? "diff" : null, ...e.rows.map(([op, line]) => h("span", { "+": "add", "-": "del" }[op], line || " "))));
 }
 
-/* ---- the book card: the attended version or chapter, set as a book's pages ---- */
+/* ---- the book card: the attended version as its contents, the attended chapter as its text ---- */
 
-const bookEl = $("#book"), leaf = bookEl.querySelector(".leaf"), ribbon = bookEl.querySelector(".ribbon");
-const label = (c) => (c.kind === "def" || c.kind === "class" ? c.kind + " " + c.name : c.name);
-const span = (e) => (e.from === e.to ? "v" + e.from : `v${e.from}–v${e.to}`);
-// The era a chapter page reads: the one holding version n, else the last before it (a removed chapter).
-const eraAt = (d, c, n) => d.eras[c.key].find((e) => e.from <= n && n <= e.to) || d.eras[c.key].filter((e) => e.to < n).pop();
-
-function roman(n) {
-  let out = "";
-  for (const [v, s] of [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"],
-    [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]]) while (n >= v) { out += s; n -= v; }
-  return out;
-}
-
-function act(el, fn) {
-  el.type = "button";
-  el.onclick = fn;
-  return el;
-}
+const mast = (left, right) => h("div", "mast", h("span", null, left), h("span", null, right));
+const running = (d, v) => mast(d.path, `v${v.n} · ${when(v.at)}`);
 
 function show(sub) {
   const id = sub ? [sub.d.path, sub.v.n, sub.c?.key, sub.e?.from].join("|") : "front|" + (bottle?.root || "");
   if (bookEl.dataset.id === id) return;
   bookEl.dataset.id = id;
-  leaf.replaceChildren(...(!sub ? frontispiece() : sub.c ? chapterPage(sub) : contentsPage(sub)));
-  leaf.scrollTop = 0;
-}
-
-function mast(d, v) {
-  return h("div", "mast", h("span", null, d.path), h("span", null, `v${v.n} · ${when(v.at)}`));
-}
-
-function frontispiece() {
-  const name = bottle ? bottle.root.split(/[\\/]/).filter(Boolean).pop() : "bottle";
-  return [h("div", "mast", h("span", null, "bottle"), h("span", null, bottle ? plural(bottle.items.length, "item") : "")),
-    h("div", "numeral", "◆"), h("h2", null, name),
-    h("p", "epigraph", "The page follows your attention.", h("cite", null, "rest on a version, chapter or era"))];
+  bookEl.replaceChildren(...(!sub ? [mast("bottle", bottle ? plural(bottle.items.length, "item") : ""),
+    h("p", "held", "rest on a version, chapter or era")] : sub.c ? chapterPage(sub) : contentsPage(sub)).filter(Boolean));
+  bookEl.scrollTop = 0;
 }
 
 function contentsPage({ d, v }) {
-  const at = d.versions.indexOf(v), x = v.delta;
-  const said = !v.parsed ? "does not parse" : !x ? "first edition" : x.unparsed ? "after a syntax error"
-    : `${x.add} new · ${x.chg} changed · ${x.del} removed`;
-  const turn = (i) => d.versions[i] && act(h("button", null, i < at ? `‹ v${i + 1}` : `v${i + 1} ›`), () => show({ d, v: d.versions[i] }));
-  return [mast(d, v), h("div", "numeral", "contents"), h("h2", null, d.path.split("/").pop()),
-    h("p", "epigraph", said, h("cite", null, plural(v.lines, "line"))),
-    h("div", "fleuron", "❦"),
-    h("ol", "toc", ...v.chapters.map((c, i) => h("li", c.status, act(h("button", null,
-      h("span", "n", roman(i + 1)), h("span", "nm", label(c)), h("span", "lead"),
-      h("span", "pg", c.status === "removed" ? "—" : String(c.line))), () => show({ d, v, c }))))),
-    h("div", "folio", turn(at - 1) || h("span"), h("b", null, `— v${v.n} —`), turn(at + 1) || h("span"))];
+  const at = d.versions.indexOf(v);
+  const turn = (i, text) => d.versions[i] && act(h("button", null, text), () => show({ d, v: d.versions[i] }));
+  return [running(d, v), h("h2", null, d.path.split("/").pop(), " ", ...summary(v)),
+    h("ol", "toc", ...v.chapters.map((c, i) => h("li", c.status || (quiet(v, c) ? "quiet" : ""), act(h("button", null,
+      h("span", "n", "§" + (i + 1)), h("span", "nm", label(c)), h("span", "pg", c.status === "removed" ? "—" : String(c.line))),
+      () => show({ d, v, c }))))),
+    h("div", "folio", turn(at - 1, `‹ v${at}`) || h("span"), h("span", null, plural(v.lines, "line")), turn(at + 1, `v${at + 2} ›`) || h("span"))];
 }
 
 function chapterPage({ d, v, c, e }) {
-  const era = e || eraAt(d, c, v.n);
-  const text = era.rows.filter((r) => r[0] !== "-").map((r) => r[1]);
+  const runs = d.eras[c.key];
+  // The era read: the one clicked, else the one holding this version, else the last before it (a removed chapter).
+  const era = e || runs.find((x) => x.from <= v.n && v.n <= x.to) || runs.filter((x) => x.to < v.n).pop();
   const here = era.from <= v.n && v.n <= era.to && c.status !== "removed";
-  const after = d.versions[era.to];
-  const held = `held ${span(era)} · ${when(d.versions[era.from - 1].at)} → ${after ? when(after.at) : "now"}`;
+  const shown = era.rows.filter((r) => r[0] !== "-");
   const list = v.chapters, i = list.indexOf(c);
-  const turn = (j) => list[j] && act(h("button", null, j < i ? `‹ ${roman(j + 1)}` : `${roman(j + 1)} ›`), () => show({ d, v, c: list[j] }));
-  return [mast(d, v), h("div", "numeral", "chapter " + roman(i + 1)), h("h2", null, label(c)),
-    h("p", "epigraph", c.doc, h("cite", null, c.status === "removed" ? `removed in v${v.n} · last ${held}` : held)),
-    h("div", "fleuron", "❦"),
-    h("pre", "text", ...text.map((line, k) => {
-      const row = h("span", null, line || " ");
+  const turn = (j, text) => list[j] && act(h("button", null, text), () => show({ d, v, c: list[j] }));
+  return [running(d, v), h("h2", null, h("span", "n", "§" + (i + 1)), " ", label(c)),
+    c.doc && h("p", "doc", c.doc),
+    h("p", "held", (c.status === "removed" ? `removed in v${v.n} · last ` : "") + `held ${span(era)} · ${life(d, era)}`),
+    h("pre", runs.indexOf(era) ? "text diff" : "text", ...shown.map(([op, line], k) => {
+      const row = h("span", op === "+" ? "add" : null, line || " ");
       if (here) row.dataset.n = c.line + k;
       return row;
     })),
-    h("div", "folio", turn(i - 1) || h("span"), h("b", null, `— ${roman(i + 1)} —`), turn(i + 1) || h("span")),
-    h("div", "where", here ? `lines ${c.line}–${c.line + text.length - 1} of v${v.n}` : `as of ${span(era)}`)];
+    h("div", "folio", (list[i - 1] && turn(i - 1, "‹ " + label(list[i - 1]))) || h("span"),
+      h("span", null, here ? `lines ${c.line}–${c.line + shown.length - 1}` : `as of ${span(era)}`),
+      (list[i + 1] && turn(i + 1, label(list[i + 1]) + " ›")) || h("span"))];
 }
 
 /* ---- attention = window focus × mouse coherence ---- */
 
-// focus      1 while this window has focus and is showing, else 0.
-// coherence  from the last second of pointer travel. A hand at rest (low variance) or one moving
-//            straight to something (net distance near its path length) is coherent; one that wanders is not.
-// The product gathers in about a third of a second and fades over a second and a half. It sets the
-// card's order (frame, focus of the text, ribbon) and turns its page: attention has to rest on a
-// version, chapter or era for SETTLE attention-seconds before the card follows. A click turns it at once.
-const SETTLE = 0.3;
-const att = { a: 0, focus: 0, coherence: 1, trail: [], raf: 0, t: 0, cand: null, held: 0, told: 0 };
+// Focus is 1 while the window is focused and showing. Coherence reads the last second of pointer travel:
+// a hand at rest (low spread) or moving straight (net distance near its path) is coherent; a wandering one
+// is not. Smoothed, up in ~0.35 s and down in ~1.5 s, it sets the card's contrast and, after SETTLE, its page.
+const att = { a: 0, trail: [], raf: 0, t: 0, cand: null, held: 0 };
 
 function coherence(trail) {
   if (trail.length < 3) return 1;
@@ -522,15 +408,9 @@ function tick(now) {
   const dt = att.t ? Math.min(0.1, (now - att.t) / 1000) : 0;
   att.t = now;
   att.trail = att.trail.filter((p) => now - p.t <= 1000);
-  att.focus = document.hasFocus() && !document.hidden ? 1 : 0;
-  att.coherence = coherence(att.trail);
-  const target = att.focus * att.coherence;
+  const target = (document.hasFocus() && !document.hidden ? 1 : 0) * coherence(att.trail);
   att.a += (target - att.a) * (1 - Math.exp(-dt / (target > att.a ? 0.35 : 1.5)));
   bookEl.style.setProperty("--a", att.a.toFixed(3));
-  if (now - att.told > 250) {
-    att.told = now;
-    ribbon.title = `attention ${att.a.toFixed(2)} = focus ${att.focus} × coherence ${att.coherence.toFixed(2)}`;
-  }
   const settling = Boolean(att.cand?.isConnected) && att.held < SETTLE;
   if (settling) {
     att.held += dt * att.a;
@@ -544,13 +424,14 @@ function tick(now) {
 
 // Run fn without moving the anchor on screen, so content changing above the pointer can't slide under it.
 function keep(anchor, fn) {
-  const y = anchor?.getBoundingClientRect().top;
+  const y = anchor.getBoundingClientRect().top;
   fn();
-  if (anchor?.isConnected) scrollBy(0, anchor.getBoundingClientRect().top - y);
+  if (anchor.isConnected) scrollBy(0, anchor.getBoundingClientRect().top - y);
 }
 
 function unfold(n) {
   for (const sib of n.parentElement.children) if (sib !== n && sib.classList.contains("open")) fold(sib);
+  release(n);
   const kids = n.lastElementChild, made = n._build(), gen = (n._gen = (n._gen || 0) + 1);
   n.classList.add("open");
   n.firstElementChild.setAttribute("aria-expanded", "true");
@@ -581,8 +462,17 @@ function leave(n) {
   if (pressed) return arm(n); // mid-drag (selecting, scrollbar): wait for the release
   const was = n.getBoundingClientRect();
   fold(n);
-  // Left downward: hold whatever the pointer moved onto still while this node shrinks above it.
-  if (py > was.bottom) scrollBy(0, n.getBoundingClientRect().height - was.height);
+  // Left downward: keep the folded height as a gap, so what the pointer moved onto stays put.
+  if (py > was.bottom) {
+    n.style.marginBottom = `calc(0.2em + ${was.height - n.getBoundingClientRect().height}px)`;
+    holds.add(n);
+  }
+}
+
+// A gap closes once the pointer is back above it, where nothing can slide under the hand.
+function release(n) {
+  n.style.marginBottom = "";
+  holds.delete(n);
 }
 
 board.addEventListener("click", (e) => {
@@ -593,8 +483,8 @@ board.addEventListener("click", (e) => {
   if (n._subject && n.classList.contains("open")) show(n._subject);
 });
 addEventListener("pointermove", (e) => {
-  px = e.clientX;
   py = e.clientY;
+  for (const n of holds) if (!n.isConnected || py < n.getBoundingClientRect().bottom) release(n);
   if (e.pointerType === "touch") return;
   att.trail.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
   const n = e.target.closest?.(".node.L-versions, .node.L-chapters, .node.L-eras") || null;
@@ -625,10 +515,11 @@ sortEl.addEventListener("change", () => {
   render();
 });
 try { sortEl.value = localStorage.getItem("stratabasor.bottle.sort") || "recent"; } catch (_) {}
-// Anything scrolled or tabbed into view lands below the sticky bar, not under it.
+// The card sits below the sticky bar, and anything scrolled or tabbed into view lands below it too.
 new ResizeObserver(() => {
-  document.documentElement.style.scrollPaddingTop = $("#bar").offsetHeight + 8 + "px";
-  document.documentElement.style.setProperty("--bar-h", $("#bar").offsetHeight + "px");
+  const bar = $("#bar").offsetHeight;
+  document.documentElement.style.setProperty("--bar-h", bar + "px");
+  document.documentElement.style.scrollPaddingTop = bar + 8 + "px";
 }).observe($("#bar"));
 show(null);
 wake();

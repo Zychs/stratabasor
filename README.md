@@ -12,15 +12,15 @@ Hold the pointer on a row and the hover card fills in, above the companion card.
 
 ## Bottle
 
-`/bottle`, from `bottle` at the foot of the spine, reads bottles. A bottle is a folder's `.bottle/bottle.db`, made by `bottle.py snapshot` (journal-clip, `tools/bottle`): every saved version of its .py files. The page finds them in each known root and up to two folders down.
+`/bottle`, from `bottle` at the foot of the spine, reads bottles: a folder's `.bottle/bottle.db`, made by `bottle.py snapshot` (journal-clip `tools/bottle`). It looks in each known root and two folders down.
 
-Five levels, each a smaller copy of the one above. Items are the tracked files. Versions are every saved copy. Chapters are a copy's top-level parts: imports, each def and class, module code. Eras are runs of versions in which a chapter's code held still; comments and formatting do not end one. Precious is the chapter's code in an era, against the era before.
+Five levels, each a smaller copy of the one above: items (tracked files), versions (saved copies), chapters (imports, each def and class, module code), eras (runs where a chapter's code held still; comments and formatting don't end one), precious (an era's code against the one before). What changed reads bright; what held still steps back.
 
 Click opens one node and folds the others beside it. Move the pointer out and it folds. Escape folds the deepest.
 
-Beside it sits the book card, in house negentropic-blue. The attended version is a contents page; the attended chapter is a chapter: numeral, title, its docstring as epigraph, its text with line numbers, a folio to turn pages. Attention is window focus times mouse coherence. A hand at rest, or moving straight to something, is coherent; a wandering one is not. Once attention has rested on a version, chapter, or era, the card turns to it; a click turns it at once. The card's order follows attention: the cyan frame lights, the text comes into focus, the ribbon lengthens. Hover the ribbon for the reading.
+Beside it, the book card, in house negentropic-blue: the attended version's contents, or the attended chapter with its docstring and line numbers. Attention is window focus times mouse coherence: a hand at rest or moving straight is coherent, a wandering one is not. The card turns to what attention rests on, at once on a click. Its frame and text contrast rise with attention.
 
-The module is `bottle/`: `shelf.py` reads, `bottle.html` shows, `test_shelf.py` checks. `serve.py` loads `shelf.py` by path on first use.
+`bottle/`: `shelf.py` reads, `bottle.html` shows, `test_shelf.py` checks. `serve.py` loads `shelf.py` by path on first use.
 
 ```powershell
 python -m unittest discover -s C:\dev\stratabasor\bottle

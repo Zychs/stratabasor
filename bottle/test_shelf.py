@@ -90,7 +90,7 @@ class ChaptersTest(unittest.TestCase):
         self.assertIn("def fake():", cut["module"]["text"], "a def inside a string is module code")
         self.assertNotIn("def fake", cut)
         self.assertEqual(cut["def helper"]["text"], "def helper(x):\n    return x * 2", "the later def wins")
-        self.assertEqual(cut["def serve"]["kind"], "def")
+        self.assertIn("async def serve", cut["def serve"]["text"], "async defs are defs")
 
     def test_comments_and_decorators_travel_with_the_def(self):
         cut = shelf.chapters("x = 1\n\n# keeps rows\n@dec\ndef f():\n    pass\n")
